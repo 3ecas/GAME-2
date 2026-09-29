@@ -10,11 +10,11 @@ A square, a mountain, a slingshot. Pull back, release, and the square launches t
 ## Core loop
 
 1. The square rests on a ledge. A pull shows a band toward the finger and a dashed line the way the square will go, its length showing the power.
-2. On release it flies on a real parabola, spinning forward.
-3. Where it lands, the velocity is split against the surface: the part into the surface bounces back at 30 percent, the part along it keeps 55 percent. Below a small impact speed it sticks and slides instead.
-4. Sliding follows the surface with friction. Flat ledges and gentle slopes (under about 23°) bring it to rest. Steeper slopes accelerate it back down, over edges and into the air again, until it finds a ledge lower down: the rewind is the physics, not a menu.
-5. Surfaces steeper than 65° are walls: the square bounces off them. Crevasses are gaps in the mountain: fall into one and the run ends. Falling to the foot of the mountain ends it too.
-6. Every landing updates the highest point reached. A rest higher than the last rest shows the meters gained; a rest lower shows where you slid back to.
+2. On release it flies on a real parabola, spinning.
+3. It is a rigid body: its four corners hit the mountain, not a point under it. A corner that lands first tips the square over; a face that lands flat stops it. Impacts bounce a little, friction acts at the corners, and both put torque on the body, so it tumbles, skids and rights itself the way a block does.
+4. Flat ledges and gentle slopes (under about 23°) let it come to rest on a face. On steeper ground friction cannot hold it: it slides or tumbles back down, over edges and into the air again, until it finds a ledge lower down. The rewind is the physics, not a menu.
+5. Walls are just steep surfaces: corners bounce off them. Crevasses are slots in the mountain: fall into one and the run ends. Falling to the foot of the mountain, or twelve seconds without touching anything, ends it too.
+6. Every ground contact updates the highest point reached. A rest higher than the last rest shows the meters gained; a rest lower shows where you slid back to.
 
 A run is a minute or a few. Restart is one tap.
 
@@ -24,7 +24,11 @@ Physics runs on a fixed 1/240 s step inside an accumulator, so every phone plays
 
 ## Physics
 
-All numbers live in `data.js`. Gravity 1800 px/s², launch speed up to 820 px/s at a full 140 px pull, so a full-power launch can gain at most about 187 px (19 m) straight up, or carry about 370 px on the flat. Restitution 0.3, surface friction on impact 0.55, sliding friction 0.35, static friction 0.42. `simulateLaunch(vx, vy)` runs the same integrator without side effects and `solveTo(ledge)` scans angles and powers for a launch that rests on a given ledge; the demo behind the menu uses it, and so do the tests.
+All numbers live in `data.js`. Gravity 1800 px/s², launch speed up to 820 px/s at a full 140 px pull, so a full-power launch can gain at most about 187 px (19 m) straight up, or carry about 370 px on the flat.
+
+Each fixed step moves and rotates the square, then runs three passes over its four corners. A corner below the mountain's outline is pushed out toward the nearest point of the outline (crevasse walls and floors are part of the outline, so a corner is never pushed up through rock). If the corner is moving into the surface it receives a normal impulse with restitution 0.25, or none at all below 40 px/s so resting contacts stay still, then a Coulomb friction impulse capped at 0.42 times the normal impulse. Both impulses act at the corner, so they change the spin as well as the velocity; the moment of inertia is that of a uniform square. The square is asleep, and can be launched, after a quarter second in contact with speed under 14 px/s and spin under 0.7 rad/s. Two safety nets exist for things that should never happen: a center found inside rock is lifted onto the surface, and twelve seconds without any contact counts as a fall.
+
+`simulateLaunch(vx, vy)` runs the same integrator without side effects and `solveTo(ledge)` scans angles and powers for a launch that rests on a given ledge; the demo behind the menu uses it, and so do the tests.
 
 ## The mountain
 
@@ -40,7 +44,7 @@ One mountain per day, seeded from the date so everyone climbs the same one. One 
 
 ## Feel
 
-- Squash toward the pull while aiming, a stretch on launch, squash on every bounce, spin in the air, a slide on landing, and the square settles flat against whatever slope it rests on.
+- Squash toward the pull while aiming, a stretch on launch, a squash scaled by each impact, spin in the air, and the tumble, skid or clean landing that the corners produce.
 - Particles are tiny spinning squares on launch and on bounces.
 - Optional synthesized sound: a rising tone while pulling, a thock on launch, ticks on bounces, a two-note chime on gaining height, a low drop on a fall. Fully playable on mute.
 - Haptics go through the same `haptic()` hook as Next Stop. The game pauses itself in the background and cancels a pull in progress.

@@ -6,11 +6,14 @@
      DRAG_MAX          pull length (px on screen) that gives a full-power launch
      DEADZONE          pulls shorter than this are ignored (a tap is not a launch)
      SIZE              side of the square
-     BOUNCE            restitution along the surface normal when landing
-     BOUNCE_FRICTION   speed along the surface kept on each bounce
-     BOUNCE_MIN_V      below this impact speed the square sticks and slides instead of bouncing
-     MU_K / MU_S       sliding and static friction; the square rests on slopes up to atan(MU_S), about 23°
-     WALL_DEG          surfaces steeper than this act as walls (bounce back instead of landing)
+     BOUNCE            restitution of a corner hitting the mountain (0 = dead, 1 = perfect bounce)
+     BOUNCE_V          impacts slower than this do not bounce at all, so resting contacts stay still
+     MU                Coulomb friction at the contact corners; a face rests on slopes up to about atan(MU)
+     SPIN              spin given on launch, as a fraction of speed over half the side
+     SLOP / CORR       penetration tolerance and the fraction corrected per step (keeps corners out of the rock)
+     REST_V / REST_W   linear and angular speed below which the square counts as still
+     REST_TIME         seconds of stillness in contact before it is asleep and can be launched again
+     AIR_TIMEOUT       seconds without touching anything before the run counts as a fall (safety net)
      STEP              fixed physics step; rendering interpolates between steps so motion stays smooth at any frame rate
      CAM_X / CAM_Y     where the square sits on screen, as fractions of width and height
      M_PER_PX          meters of height per world pixel
@@ -32,7 +35,8 @@
 window.HOP_DATA = {
   tuning: {
     G: 1800, V_MAX: 820, DRAG_MAX: 140, DEADZONE: 12, SIZE: 26,
-    BOUNCE: 0.3, BOUNCE_FRICTION: 0.55, BOUNCE_MIN_V: 90, MU_K: 0.35, MU_S: 0.42, WALL_DEG: 65, STEP: 1 / 240,
+    BOUNCE: 0.25, BOUNCE_V: 40, MU: 0.42, SPIN: 0.3, SLOP: 0.2, CORR: 0.85,
+    REST_V: 14, REST_W: 0.7, REST_TIME: 0.25, AIR_TIMEOUT: 12, STEP: 1 / 240,
     CAM_X: 0.42, CAM_Y: 0.62,
     M_PER_PX: 0.1, RAMP_M: 300,
     LEDGE: [[60, 120], [34, 80]], SLOPE_DEG: [[18, 34], [26, 56]], GAIN: [[30, 80], [60, 130]],

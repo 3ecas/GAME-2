@@ -16,6 +16,7 @@
   const TAU = Math.PI * 2;
   const RAD = Math.PI / 180;
   const HALF = T.SIZE / 2;
+  const I_INV = 6 / (T.SIZE * T.SIZE); // inverse moment of inertia of a unit-mass square
 
   // ---------- helpers ----------
   const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
@@ -150,7 +151,7 @@
     const r = {
       mode, demo: !!demo, seed, rng: mulberry32(seed), t: 0,
       segs: [], acc: { gain: 0, dx: 0 }, chain: 0, maxH: 0, restH: 0, results: [], startBest: Save.d.best, baseY: 320,
-      ball: { x: 0, y: 0, vx: 0, vy: 0, vt: 0, ang: 0, av: 0, state: 'rest', hit: false, sx: 1, sy: 1, restT: 0, px: 0, py: 0, pang: 0 },
+      ball: { x: 0, y: -HALF, vx: 0, vy: 0, ang: 0, av: 0, state: 'rest', hit: false, sx: 1, sy: 1, restT: 0, airT: 0, groundY: 0, cx: 0, cy: 0, px: 0, py: -HALF, pang: 0 },
       alpha: 1, aim: null, acc2: 0, cam: { x: -LOGICAL_W * T.CAM_X, y: -600 * T.CAM_Y }, popups: [], parts: [], shake: 0,
       dead: false, deadReason: '', deadT: 0, theme: 0, themeFrom: 0, themeMix: 1, hinted: false, demoT: 0, demoV: null, dailyResult: null,
     };
@@ -159,7 +160,13 @@
     r.cam.y = -H * T.CAM_Y;
     return r;
   }
-  function addSeg(r, x0, y0, x1, y1, kind) { r.segs.push({ x0, y0, x1, y1, kind, floor: kind === 'hole' ? Math.max(y0, y1) + T.HOLE_DEPTH : 0 }); }
+  function line(x0, y0, x1, y1) { const len = Math.hypot(x1 - x0, y1 - y0) || 1; return { x0, y0, x1, y1, nx: (y1 - y0) / len, ny: -(x1 - x0) / len }; }
+  function addSeg(r, x0, y0, x1, y1, kind) {
+    const floor = kind === 'hole' ? Math.max(y0, y1) + T.HOLE_DEPTH : 0;
+    const pit = floor + 80;
+    const lines = kind === 'hole' ? [line(x0, y0, x0, pit), line(x0, pit, x1, pit), line(x1, pit, x1, y1)] : [line(x0, y0, x1, y1)];
+    r.segs.push({ x0, y0, x1, y1, kind, floor, pit, lines });
+  }
   function addLedge(r, x, y, d) { const len = pick(T.LEDGE, d, r.rng()); addSeg(r, x, y, x + len, y, 'ledge'); r.acc = { gain: 0, dx: 0 }; r.chain = 0; }
   // Ledges are safe; between two ledges come at most two obstacles, and the pair is kept within REACH of a full pull from the last ledge.
   function genTerrain(r, untilX) {
@@ -196,65 +203,120 @@
     return { y: s.y0 + (s.y1 - s.y0) * t, dx: (s.x1 - s.x0) / len, dy: (s.y1 - s.y0) / len, deg: Math.atan2(-(s.y1 - s.y0), s.x1 - s.x0) / RAD, seg: s };
   }
   function fallLine(x) { const s = segAt(x); return s && s.kind === 'hole' ? s.floor : run.baseY; }
+  // Height of the solid at x: the surface, or the floor of a crevasse. Anything below it is rock.
+  function surfaceY(x) {
+    const s = segAt(x);
+    if (!s) return Infinity;
+    if (s.kind === 'hole') return s.pit;
+    return s.y0 + (s.y1 - s.y0) * ((x - s.x0) / (s.x1 - s.x0 || 1));
+  }
+  function segIndexAt(x) {
+    const s = run.segs; let lo = 0, hi = s.length - 1;
+    if (x < s[0].x0) return 0; if (x >= s[hi].x1) return hi;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (s[mid].x1 <= x) lo = mid + 1; else hi = mid; }
+    return lo;
+  }
+  // Closest point on the mountain's outline to a point, searching the segments around x.
+  function nearestLine(x, y) {
+    const i = segIndexAt(x), segs = run.segs;
+    let best = null;
+    for (let j = Math.max(0, i - 2); j <= Math.min(segs.length - 1, i + 2); j++) {
+      for (const L of segs[j].lines) {
+        const dx = L.x1 - L.x0, dy = L.y1 - L.y0, len2 = dx * dx + dy * dy || 1;
+        const t = clamp(((x - L.x0) * dx + (y - L.y0) * dy) / len2, 0, 1);
+        const px = L.x0 + dx * t, py = L.y0 + dy * t, d = Math.hypot(x - px, y - py);
+        if (!best || d < best.d) best = { d, px, py, line: L };
+      }
+    }
+    return best;
+  }
   function nextLedge(x) { for (const s of run.segs) if (s.kind === 'ledge' && s.x0 > x + 4) return s; return null; }
 
   // ---------- physics (fixed step; y grows downward) ----------
-  // Returns an event name or null. Surface contact decomposes velocity into normal and tangential parts; walls push back.
+  // The square is a rigid body: position is its center, and its four corners collide with the mountain.
+  function corners(b) {
+    const c = Math.cos(b.ang), sn = Math.sin(b.ang), h = HALF;
+    return [
+      { x: b.x + c * h - sn * h, y: b.y + sn * h + c * h },
+      { x: b.x - c * h - sn * h, y: b.y - sn * h + c * h },
+      { x: b.x - c * h + sn * h, y: b.y - sn * h - c * h },
+      { x: b.x + c * h + sn * h, y: b.y + sn * h - c * h },
+    ];
+  }
+  // One step. Corners inside the rock are pushed out along the nearest surface; approaching corners get a
+  // normal impulse (with restitution above BOUNCE_V) and a Coulomb friction impulse, both of which also spin the
+  // body. Returns 'hit', 'rest', 'fall' or null.
   function stepBall(b, dt) {
-    if (b.state === 'air') {
-      const px = b.x;
-      b.vy += T.G * dt;
-      b.x += b.vx * dt; b.y += b.vy * dt; b.ang += b.av * dt;
-      const g = groundAt(b.x);
-      if (g && b.y >= g.y) {
-        if (Math.abs(g.deg) > T.WALL_DEG || b.y - g.y > T.SIZE) { b.x = px; b.vx = -b.vx * 0.3; b.hit = true; return 'side'; }
-        b.y = g.y;
-        const vn = b.vx * g.dy - b.vy * g.dx, vt = b.vx * g.dx + b.vy * g.dy;
-        if (vn >= 0) return null;
-        if (-vn > T.BOUNCE_MIN_V) {
-          const vn2 = -vn * T.BOUNCE, vt2 = vt * T.BOUNCE_FRICTION;
-          b.vx = vt2 * g.dx + vn2 * g.dy; b.vy = vt2 * g.dy - vn2 * g.dx; b.av = vt2 / HALF;
-          return 'bounce';
-        }
-        b.state = 'slide'; b.vt = vt * T.BOUNCE_FRICTION; b.av = b.vt / HALF;
-        return 'land';
+    if (b.state !== 'air') return null;
+    b.vy += T.G * dt;
+    b.x += b.vx * dt; b.y += b.vy * dt; b.ang += b.av * dt;
+    let contacts = 0, groundHits = 0, impact = 0, groundY = -Infinity, cx = 0, cy = 0;
+    for (let it = 0; it < 3; it++) {
+      for (const c of corners(b)) {
+        if (!(c.y > surfaceY(c.x))) continue;
+        const nl = nearestLine(c.x, c.y);
+        if (!nl) continue;
+        let nx, ny;
+        if (nl.d > 0.3) { nx = (nl.px - c.x) / nl.d; ny = (nl.py - c.y) / nl.d; } else { nx = nl.line.nx; ny = nl.line.ny; }
+        const corr = Math.max(nl.d - T.SLOP, 0) * T.CORR;
+        b.x += nx * corr; b.y += ny * corr;
+        const rx = c.x - b.x, ry = c.y - b.y;
+        const vn = (b.vx - b.av * ry) * nx + (b.vy + b.av * rx) * ny;
+        if (it === 0) { contacts++; if (ny < -0.5) { groundHits++; if (c.y > groundY) { groundY = c.y; cx = c.x; cy = c.y; } } }
+        if (vn >= 0) continue;
+        if (it === 0) impact = Math.max(impact, -vn);
+        const rn = rx * ny - ry * nx;
+        const e = -vn > T.BOUNCE_V ? T.BOUNCE : 0;
+        const j = -(1 + e) * vn / (1 + rn * rn * I_INV);
+        b.vx += j * nx; b.vy += j * ny; b.av += rn * j * I_INV;
+        const tx = -ny, ty = nx;
+        const vt = (b.vx - b.av * ry) * tx + (b.vy + b.av * rx) * ty;
+        const rt = rx * ty - ry * tx;
+        const jt = clamp(-vt / (1 + rt * rt * I_INV), -T.MU * j, T.MU * j);
+        b.vx += jt * tx; b.vy += jt * ty; b.av += rt * jt * I_INV;
       }
-      if (b.y > fallLine(b.x)) { b.state = 'fall'; return 'fall'; }
-    } else if (b.state === 'slide') {
-      const g0 = groundAt(b.x);
-      if (!g0) { b.state = 'air'; b.vx = b.vt; b.vy = 0; return 'edge'; }
-      const N = T.G * Math.abs(g0.dx), a = T.G * g0.dy;
-      if (b.vt !== 0) { const v2 = b.vt + (a - T.MU_K * N * Math.sign(b.vt)) * dt; b.vt = Math.sign(v2) !== Math.sign(b.vt) ? 0 : v2; }
-      if (b.vt === 0) { if (Math.abs(a) > T.MU_S * N) b.vt = a * dt; else { b.state = 'rest'; return 'rest'; } }
-      const nx = b.x + b.vt * g0.dx * dt, g1 = groundAt(nx);
-      if (!g1) { b.x = nx; b.state = 'air'; b.vx = b.vt * g0.dx; b.vy = b.vt * g0.dy; return 'edge'; }
-      if (g1.y - (b.y + b.vt * g0.dy * dt) > 6) { b.x = nx; b.state = 'air'; b.vx = b.vt * g0.dx; b.vy = b.vt * g0.dy; return 'edge'; }
-      if (Math.abs(g1.deg) > T.WALL_DEG) { b.vt = -b.vt * 0.3; return 'side'; }
-      b.x = nx; b.y = g1.y; b.ang += (b.vt / HALF) * dt;
+    }
+    // never inside the rock: if the center somehow got below the surface, lift it out
+    const sy = surfaceY(b.x), sg = segAt(b.x);
+    if (sg && sg.kind !== 'hole' && b.y > sy + HALF * 0.5) { b.y = sy - HALF; if (b.vy > 0) b.vy = 0; }
+    if (b.y > fallLine(b.x)) { b.state = 'fall'; return 'fall'; }
+    if (contacts > 0) {
+      b.airT = 0;
+      if (groundHits > 0) { b.groundY = groundY; b.cx = cx; b.cy = cy; }
+      if (Math.hypot(b.vx, b.vy) < T.REST_V && Math.abs(b.av) < T.REST_W) {
+        b.restT += dt;
+        if (b.restT >= T.REST_TIME) { b.vx = 0; b.vy = 0; b.av = 0; b.state = 'rest'; return 'rest'; }
+      } else b.restT = 0;
+      if (impact > 40) { b.impact = impact; return 'hit'; }
+    } else {
+      b.restT = 0; b.airT += dt;
+      if (b.airT > T.AIR_TIMEOUT) { b.state = 'fall'; return 'fall'; }
     }
     return null;
   }
   function launchWith(vx, vy) {
     const b = run.ball;
-    b.vx = vx; b.vy = vy; b.state = 'air'; b.hit = false;
+    b.vx = vx; b.vy = vy; b.state = 'air'; b.hit = false; b.restT = 0; b.airT = 0;
     const sp = Math.hypot(vx, vy);
-    b.av = (sp / HALF) * 0.7 * (vx >= 0 ? 1 : -1);
+    b.av = (sp / HALF) * T.SPIN * (vx >= 0 ? 1 : -1);
     run.acc2 = 0;
     b.sx = 0.85; b.sy = 1.15;
-    squares(b.x, b.y, 5, hexA(theme().ink, 0.35), 90, 14);
+    squares(b.x, b.y + HALF, 5, hexA(theme().ink, 0.35), 90, 14);
     Sfx.aim(-1); Sfx.launch(sp / T.V_MAX); haptic('tap');
   }
   // Pure: plays a launch from the current resting position and reports where it ends up.
   function simulateLaunch(vx, vy) {
     const src = run.ball;
-    const b = { x: src.x, y: src.y, vx, vy, vt: 0, ang: 0, av: 0, state: 'air', hit: false };
+    const b = { x: src.x, y: src.y, vx, vy, ang: src.ang, av: 0, state: 'air', restT: 0, airT: 0, groundY: src.groundY, cx: 0, cy: 0, impact: 0 };
+    const sp = Math.hypot(vx, vy);
+    b.av = (sp / HALF) * T.SPIN * (vx >= 0 ? 1 : -1);
     let t = 0, ev = null, touchY = Infinity;
     while (t < 8) {
       ev = stepBall(b, T.STEP); t += T.STEP;
-      if (ev === 'bounce' || ev === 'land' || ev === 'rest') touchY = Math.min(touchY, b.y);
+      if (ev === 'hit' || ev === 'rest') touchY = Math.min(touchY, b.groundY);
       if (ev === 'rest' || ev === 'fall') break;
     }
-    return { state: b.state, x: b.x, y: b.y, hit: b.hit, touchY, t };
+    return { state: b.state, x: b.x, y: b.y, bottom: b.groundY, ang: b.ang, touchY, t };
   }
   // A launch that comes to rest on ledge `seg`, as near its middle as the scan finds. Null if none.
   function solveTo(seg, fast) {
@@ -266,7 +328,7 @@
       for (let i = 6; i <= 100; i += (fast ? 4 : 2)) {
         const v = (i / 100) * T.V_MAX, vx = v * Math.cos(a), vy = -v * Math.sin(a);
         const res = simulateLaunch(vx, vy);
-        if (res.state !== 'rest' || res.x < seg.x0 || res.x > seg.x1 || Math.abs(res.y - seg.y0) > 2) continue;
+        if (res.state !== 'rest' || res.x < seg.x0 || res.x > seg.x1 || Math.abs(res.bottom - seg.y0) > 3) continue;
         const err = Math.abs(res.x - mid);
         if (!best || err < best.err) best = { vx, vy, err };
         if (err < 4) return best;
@@ -311,7 +373,7 @@
 
   function touched() {
     const b = run.ball;
-    const h = -b.y;
+    const h = -b.groundY;
     if (h > run.maxH) {
       run.maxH = h;
       if (!run.demo && meters(h) > Save.d.best) Save.d.best = meters(h);
@@ -320,23 +382,21 @@
   }
   function onEvent(ev) {
     const b = run.ball;
-    if (ev === 'bounce') { b.sy = 0.7; b.sx = 1.25; squares(b.x, b.y, 4, hexA(theme().ink, 0.3), 70, 10); Sfx.bounce(Math.hypot(b.vx, b.vy) / T.BOUNCE); touched(); }
-    else if (ev === 'land') { b.sy = 0.82; b.sx = 1.12; Sfx.bounce(140); touched(); }
-    else if (ev === 'side') Sfx.bounce(300);
-    else if (ev === 'fall') { const s = segAt(b.x); die(s && s.kind === 'hole' ? 'Fell into a crevasse' : b.hit ? 'Bounced off the rock' : 'Fell off the mountain'); }
+    if (ev === 'hit') { const k = clamp(b.impact / 500, 0, 1); b.sy = 1 - 0.3 * k; b.sx = 1 + 0.25 * k; squares(b.cx, b.cy, 3 + Math.round(3 * k), hexA(theme().ink, 0.3), 60 + 80 * k, 10); Sfx.bounce(b.impact * 2); touched(); }
+    else if (ev === 'fall') { const s = segAt(b.x); die(s && s.kind === 'hole' ? 'Fell into a crevasse' : 'Fell off the mountain'); }
     else if (ev === 'rest') resolveRest();
   }
   function resolveRest() {
     const b = run.ball;
     b.restT = 0;
     touched();
-    const h = -b.y;
+    const h = -b.groundY;
     if (h > run.restH + 1) {
-      popup('+' + Math.max(1, meters(h) - meters(run.restH)) + ' m', b.x, b.y - 54, { size: 22 });
+      popup('+' + Math.max(1, meters(h) - meters(run.restH)) + ' m', b.x, b.y - 42, { size: 22 });
       run.results.push('N');
       Sfx.up(); haptic('score');
     } else if (h < run.restH - 1) {
-      popup('back to ' + meters(h) + ' m', b.x, b.y - 54, { size: 15, spaced: true });
+      popup('back to ' + meters(h) + ' m', b.x, b.y - 42, { size: 15, spaced: true });
       run.results.push('B');
     }
     run.restH = h;
@@ -355,9 +415,6 @@
         const pull = run.aim ? aimVector({ x: run.aim.x - run.aim.sx, y: run.aim.y - run.aim.sy }) : null;
         const pow = pull ? pull.pow : 0;
         b.sx += (1 + 0.12 * pow - b.sx) * (1 - Math.exp(-dt * 14)); b.sy += (1 - 0.18 * pow - b.sy) * (1 - Math.exp(-dt * 14));
-        const g = groundAt(b.x), base = g ? Math.atan2(g.dy, g.dx) : 0;
-        const flat = base + Math.round((b.ang - base) / (Math.PI / 2)) * (Math.PI / 2);
-        b.ang += (flat - b.ang) * (1 - Math.exp(-dt * 14));
         if (run.demo) {
           if (!run.demoV && b.restT > 0.6) {
             const v = solveTo(nextLedge(b.x), true);
@@ -371,7 +428,7 @@
             if (run.demoT > 0.75) { run.aim = null; launchWith(run.demoV.vx, run.demoV.vy); run.demoV = null; }
           }
         }
-      } else if (b.state === 'air' || b.state === 'slide') {
+      } else if (b.state === 'air') {
         run.acc2 += dt;
         while (run.acc2 >= T.STEP) {
           run.acc2 -= T.STEP;
@@ -379,7 +436,7 @@
           const ev = stepBall(b, T.STEP);
           if (ev) { onEvent(ev); if (ev === 'rest' || ev === 'fall') break; }
         }
-        run.alpha = (b.state === 'air' || b.state === 'slide') ? run.acc2 / T.STEP : 1;
+        run.alpha = b.state === 'air' ? run.acc2 / T.STEP : 1;
         b.sx += (1 - b.sx) * (1 - Math.exp(-dt * 10)); b.sy += (1 - b.sy) * (1 - Math.exp(-dt * 10));
       }
     } else {
@@ -463,8 +520,8 @@
 
     const b = run.ball;
     const vx = lerp(b.px, b.x, run.alpha), vy = lerp(b.py, b.y, run.alpha), vang = lerp(b.pang, b.ang, run.alpha);
-    if (run.aim) drawAim(vx - cx, vy - cy - HALF);
-    drawSquare(vx - cx, vy - cy - HALF, b.sx, b.sy, vang);
+    if (run.aim) drawAim(vx - cx, vy - cy);
+    drawSquare(vx - cx, vy - cy, b.sx, b.sy, vang);
     drawParticles(cx, cy);
     drawPopups(cx, cy, ink);
     ctx.restore();
@@ -639,7 +696,7 @@
   window.Hop = {
     get state() { return state; }, get run() { return run; }, get H() { return H; }, get scale() { return scale; },
     start: startRun, menu: showMenu, save: Save, data: DATA, sync: syncHud,
-    simulateLaunch, solveTo, aimVector, groundAt, segAt, nextLedge, meters,
+    simulateLaunch, solveTo, aimVector, groundAt, segAt, nextLedge, meters, surfaceY, corners,
     launch(vx, vy) { if (!run || run.dead || run.ball.state !== 'rest') return false; launchWith(vx, vy); return true; },
   };
 })();
