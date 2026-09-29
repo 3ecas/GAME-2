@@ -1,4 +1,5 @@
-/* Hop — hold to charge, release to jump, land dead center.
+/* Hop — hold to charge, release to hit. The shape flies, spins, bounces and rolls out;
+   stop it on the green, or roll it into the cup for a perfect.
    Side-view 2D, one thumb, portrait, playable on mute, works offline. No dependencies, no build step. */
 (() => {
   'use strict';
@@ -8,18 +9,19 @@
   const T = DATA.tuning;
   const CHARS = DATA.characters;
   const THEMES = DATA.themes;
-  const KEY = 'hop.v1';
+  const KEY = 'hop.v2';
   const LAUNCH_UTC = Date.UTC(2026, 8, 29);
   const LOGICAL_W = 390;
-  const WATER_FRAC = 0.72;
+  const GROUND_FRAC = 0.68;
   const FONT = '-apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
+  const TAU = Math.PI * 2;
+  const RAD = Math.PI / 180;
 
   // ---------- helpers ----------
   const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
   const lerp = (a, b, t) => a + (b - a) * t;
   const fmt = (n) => Math.round(n).toLocaleString('en-US');
   const $ = (id) => document.getElementById(id);
-  const TAU = Math.PI * 2;
 
   function mulberry32(seed) {
     let a = seed >>> 0;
@@ -36,7 +38,6 @@
     for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
     return h >>> 0;
   }
-  function hash01(n) { let x = Math.imul(n | 0, 374761393) + 668265263; x = Math.imul(x ^ (x >>> 13), 1274126177); return ((x ^ (x >>> 16)) >>> 0) / 4294967296; }
   function todayKey() {
     const d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -48,20 +49,30 @@
   }
   function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function hexA(hex, a) { const c = rgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
-  function shade(hex, k) { const c = rgb(hex).map((v) => clamp(Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k), 0, 255)); return 'rgb(' + c.join(',') + ')'; }
+  function mixHex(a, b, t) { const A = rgb(a), B = rgb(b); return 'rgb(' + Math.round(lerp(A[0], B[0], t)) + ',' + Math.round(lerp(A[1], B[1], t)) + ',' + Math.round(lerp(A[2], B[2], t)) + ')'; }
+  function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
   function rr(g, x, y, w, h, r) {
     r = Math.min(r, w / 2, h / 2);
     g.beginPath(); g.moveTo(x + r, y);
     g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r);
     g.closePath();
   }
-  function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
-  function ellipse(g, x, y, rx, ry) { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, TAU); g.fill(); }
-  function tri(g, x1, y1, x2, y2, x3, y3) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.lineTo(x3, y3); g.closePath(); g.fill(); }
+  function shapePath(g, shape, cx, cy, r) {
+    g.beginPath();
+    switch (shape) {
+      case 'circle': g.arc(cx, cy, r, 0, TAU); break;
+      case 'triangle': { const R = r * 1.18; for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R + r * 0.16); } g.closePath(); break; }
+      case 'diamond': { const R = r * 1.2; g.moveTo(cx, cy - R); g.lineTo(cx + R, cy); g.lineTo(cx, cy + R); g.lineTo(cx - R, cy); g.closePath(); break; }
+      case 'hexagon': { const R = r * 1.1; for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * TAU / 6; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); break; }
+      case 'star': { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5; const R = i % 2 === 0 ? r * 1.25 : r * 0.58; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); break; }
+      case 'plus': { const w = r * 0.4, R = r * 1.05; g.moveTo(cx - w, cy - R); g.lineTo(cx + w, cy - R); g.lineTo(cx + w, cy - w); g.lineTo(cx + R, cy - w); g.lineTo(cx + R, cy + w); g.lineTo(cx + w, cy + w); g.lineTo(cx + w, cy + R); g.lineTo(cx - w, cy + R); g.lineTo(cx - w, cy + w); g.lineTo(cx - R, cy + w); g.lineTo(cx - R, cy - w); g.lineTo(cx - w, cy - w); g.closePath(); break; }
+      default: { const rad = 5; g.moveTo(cx - r + rad, cy - r); g.arcTo(cx + r, cy - r, cx + r, cy + r, rad); g.arcTo(cx + r, cy + r, cx - r, cy + r, rad); g.arcTo(cx - r, cy + r, cx - r, cy - r, rad); g.arcTo(cx - r, cy - r, cx + r, cy - r, rad); g.closePath(); }
+    }
+  }
 
   // ---------- persistence ----------
   const Save = {
-    d: { best: 0, bestHops: 0, bestCombo: 0, totalHops: 0, daily: {}, sound: true, char: CHARS[0].id, runs: 0 },
+    d: { best: 0, bestHoles: 0, bestCombo: 0, totalHoles: 0, daily: {}, sound: true, char: CHARS[0].id, runs: 0 },
     load() {
       try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && typeof o === 'object') Object.assign(this.d, o); } }
       catch (e) { /* storage blocked: play without saving */ }
@@ -114,9 +125,9 @@
         const g = this.ctx.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(this.ctx.destination); s.start();
       } catch (e) { /* ignore */ }
     },
-    jump() { this.tone(300, 0.18, 'sine', 0.18, 0, 720); },
-    land() { this.tone(160, 0.09, 'triangle', 0.16, 0, 90); },
-    perfect(c) { const b = 660 * Math.pow(1.06, Math.min(c, 12)); this.tone(b, 0.1, 'sine', 0.2); this.tone(b * 1.5, 0.28, 'sine', 0.2, 0.09); },
+    hit(p) { this.tone(240 + 120 * p, 0.07, 'triangle', 0.2, 0, 120); },
+    bounce(v) { this.tone(180 + v * 0.1, 0.05, 'triangle', clamp(v / 900, 0.04, 0.14), 0, 140); },
+    sink(c) { const b = 660 * Math.pow(1.06, Math.min(c, 12)); this.tone(b, 0.1, 'sine', 0.2); this.tone(b * 1.5, 0.28, 'sine', 0.2, 0.09); },
     splash() { this.noise(0.45, 0.35); this.tone(220, 0.4, 'sine', 0.15, 0, 60); },
   };
   function haptic(kind) {
@@ -143,7 +154,7 @@
   let state = 'menu'; // menu | playing | paused | over
   let run = null;
   let charIndex = Math.max(0, CHARS.findIndex((c) => c.id === Save.d.char));
-  let cssW = 390, cssH = 800, dpr = 1, scale = 1, H = 800, yWater = 576;
+  let cssW = 390, cssH = 800, dpr = 1, scale = 1, H = 800, yGround = 544;
   let lastT = 0;
 
   function resize() {
@@ -152,241 +163,276 @@
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     scale = cssW / LOGICAL_W;
     H = cssH / scale;
-    yWater = H * WATER_FRAC;
+    yGround = H * GROUND_FRAC;
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
   }
 
-  // ---------- physics ----------
-  function jumpParams(p) {
-    const d = T.D_MIN + (T.D_MAX - T.D_MIN) * p;
-    const tf = T.T_FLIGHT_MIN + T.T_FLIGHT_ADD * p;
-    return { vx: d / tf, vy: -T.G * tf / 2 };
-  }
-  // Where a jump of power p from (x0, y0) crosses the level yTop on the way down. NaN if it never gets that high.
-  function landingX(x0, y0, p, yTop) {
-    const j = jumpParams(p);
-    const disc = j.vy * j.vy - 2 * T.G * (y0 - yTop);
-    if (disc < 0) return NaN;
-    return x0 + j.vx * ((-j.vy + Math.sqrt(disc)) / T.G);
-  }
-  // Seconds until a jump of power p from y0 comes down to yTop (NaN if it never gets that high).
-  function landingT(y0, p, yTop) {
-    const j = jumpParams(p);
-    const disc = j.vy * j.vy - 2 * T.G * (y0 - yTop);
-    return disc < 0 ? NaN : (-j.vy + Math.sqrt(disc)) / T.G;
-  }
-  function solvePower(x0, y0, xT, yTop) {
-    let lo = 0, hi = 1;
-    for (let i = 0; i < 40; i++) {
-      const mid = (lo + hi) / 2;
-      const lx = landingX(x0, y0, mid, yTop);
-      if (isNaN(lx) || lx < xT) lo = mid; else hi = mid;
-    }
-    return (lo + hi) / 2;
-  }
-
-  // ---------- run ----------
-  const biomeFor = (i) => Math.floor(i / T.BIOME_LEN) % THEMES.length;
-  const theme = () => THEMES[run.biome];
+  // ---------- course ----------
+  const themeFor = (i) => Math.floor(i / T.THEME_LEN) % THEMES.length;
+  // Rotational symmetry of each shape, so a resting shape settles onto a flat side.
+  const SYMMETRY = { square: Math.PI / 2, circle: 0.0001, triangle: TAU / 3, diamond: Math.PI / 2, hexagon: Math.PI / 3, star: TAU / 5, plus: Math.PI / 2 };
+  const theme = () => THEMES[run.theme];
   const accent = () => CHARS[charIndex].color;
-  const padTop = (p) => yWater - p.h;
-  const padX = (p) => p.x + (p.move ? p.move.amp * Math.sin(TAU * run.t / p.move.period + p.move.phase) : 0);
 
   function newRun(mode, demo) {
-    const seed = mode === 'daily' ? hashStr('hop:' + todayKey()) : (Math.random() * 4294967296) >>> 0;
+    const seed = mode === 'daily' ? hashStr('hop2:' + todayKey()) : (Math.random() * 4294967296) >>> 0;
     const r = {
       mode, demo: !!demo, seed, rng: mulberry32(seed), t: 0,
-      score: 0, hops: 0, combo: 0, maxCombo: 0, results: [], pads: [], cur: 0, startBest: Save.d.best,
-      frog: { x: 0, y: 0, vx: 0, vy: 0, off: 0, state: 'rest', charge: 0, sx: 1, sy: 1, restT: 0, look: 0, hitReason: '' },
-      cam: { x: 0 }, popups: [], parts: [], shake: 0, dead: false, deadReason: '', deadT: 0,
-      biome: 0, biomeFrom: 0, biomeMix: 1, hinted: false, demoTarget: 0, dailyResult: null,
+      score: 0, holes: 0, combo: 0, maxCombo: 0, results: [], course: [], cur: 0, strokes: 0, startBest: Save.d.best,
+      ball: { x: 0, h: 0, vx: 0, vy: 0, ang: 0, av: 0, state: 'rest', charge: 0, sx: 1, sy: 1, restT: 0, holdT: 0, sunkHole: -1 },
+      acc: 0, cam: { x: -T.BALL_SCREEN_X }, popups: [], parts: [], shake: 0, dead: false, deadReason: '', deadT: 0,
+      theme: 0, themeFrom: 0, themeMix: 1, hinted: false, demoTarget: 0, dailyResult: null,
     };
-    while (r.pads.length < 8) spawnPad(r);
-    r.frog.x = r.pads[0].x; r.frog.y = padTop(r.pads[0]);
-    r.cam.x = r.frog.x - T.FROG_SCREEN_X;
+    while (r.course.length < 6) spawnHole(r);
     return r;
   }
 
-  function spawnPad(r) {
-    const i = r.pads.length;
-    const prev = r.pads[i - 1];
-    const diff = clamp(i / T.RAMP, 0, 1);
-    const rng = r.rng;
-    let w, x, h, move = null;
-    if (!prev) { w = 120; x = 120; h = 100; rng(); rng(); rng(); }
-    else {
-      const wLo = lerp(T.W_START[0], T.W_END[0], diff), wHi = lerp(T.W_START[1], T.W_END[1], diff);
-      w = Math.round(lerp(wLo, wHi, rng()));
-      const minGap = prev.w / 2 + w / 2 + T.GAP_MARGIN;
-      const maxGap = T.D_MAX - 24 - prev.w / 2;
-      x = Math.round(prev.x + lerp(minGap, maxGap, Math.pow(rng(), 1 - 0.45 * diff)));
-      h = Math.round(clamp(prev.h + (rng() * 2 - 1) * lerp(6, T.H_VAR_END, diff), T.H_MIN, T.H_MAX));
+  // Each hole: a water channel right after the previous green, a stretch of fairway (maybe cut by a hazard), then the green with its cup.
+  function spawnHole(r) {
+    const i = r.course.length, prev = r.course[i - 1];
+    const diff = clamp(i / T.RAMP, 0, 1), rng = r.rng;
+    const prevEnd = prev ? prev.greenEnd : 40;
+    const chW = lerp(T.CHANNEL_W[0], T.CHANNEL_W[1], diff) + (rng() - 0.5) * 8;
+    const channelStart = prevEnd, channelEnd = prevEnd + chW;
+    const fairLen = lerp(T.FAIRWAY_LEN[0], T.FAIRWAY_LEN[1], rng());
+    const gw = lerp(lerp(T.GREEN_W[0][0], T.GREEN_W[1][0], diff), lerp(T.GREEN_W[0][1], T.GREEN_W[1][1], diff), rng());
+    const greenStart = channelEnd + fairLen, greenEnd = greenStart + gw;
+    const cup = greenStart + gw * lerp(T.CUP_FRAC[0], T.CUP_FRAC[1], rng());
+    const hz = rng(), hw = rng(), hp = rng();
+    let hazard = null;
+    if (i >= T.HAZARD_FROM && hz < lerp(0, T.HAZARD_CHANCE_END, diff)) {
+      const w = Math.min(lerp(T.HAZARD_W[0], T.HAZARD_W[1], hw), fairLen - 24);
+      if (w >= 18) { const start = channelEnd + 12 + hp * (fairLen - 24 - w); hazard = { start, end: start + w }; }
     }
-    const mv = rng(), ma = rng(), mp = rng(), mph = rng();
-    if (i >= T.MOVE_FROM && mv < lerp(0, T.MOVE_CHANCE_END, diff)) move = { amp: lerp(T.MOVE_AMP[0], T.MOVE_AMP[1], ma), period: lerp(T.MOVE_PERIOD[0], T.MOVE_PERIOD[1], mp), phase: mph * TAU };
-    r.pads.push({ i, x, w, h, move, sq: 1, biome: biomeFor(i) });
+    r.course.push({ i, channelStart, channelEnd, greenStart, greenEnd, cup, hazard, theme: themeFor(i) });
   }
-  function ensurePads() { while (run.pads.length < run.cur + 8) spawnPad(run); }
+  function ensureHoles() { while (run.course.length < run.cur + 5) spawnHole(run); }
 
+  function groundAt(x) {
+    const c = run.course;
+    for (let j = Math.max(0, run.cur - 1); j < c.length; j++) {
+      const h = c[j];
+      if (x < h.channelStart) break;
+      if (x < h.channelEnd) return 'water';
+      if (h.hazard && x >= h.hazard.start && x < h.hazard.end) return 'water';
+      if (x >= h.greenStart && x <= h.greenEnd) return 'green';
+    }
+    return 'fairway';
+  }
+  function cupAt(x) {
+    for (let j = run.cur; j < Math.min(run.course.length, run.cur + 2); j++) if (Math.abs(x - run.course[j].cup) <= T.CUP_R) return j;
+    return -1;
+  }
+  // Only greens at or beyond the current hole count; resting on a green already played is just a lie on the course.
+  function greenIndexAt(x) {
+    for (let j = run.cur; j < Math.min(run.course.length, run.cur + 3); j++) { const h = run.course[j]; if (x >= h.greenStart && x <= h.greenEnd) return j; }
+    return -1;
+  }
+
+  // ---------- physics (fixed step) ----------
+  function launch(b, p) {
+    const v = lerp(T.V_MIN, T.V_MAX, clamp(p, 0, 1)), a = T.ANGLE * RAD;
+    b.vx = v * Math.cos(a); b.vy = v * Math.sin(a); b.h = 0; b.state = 'air';
+    b.av = (b.vx / T.BALL_R) * 0.9;
+  }
+  // Returns an event name or null. `h` is the height of the ball's bottom above the ground, vy is positive upward.
+  function stepBall(b, dt) {
+    const r = T.BALL_R;
+    if (b.state === 'air') {
+      b.vy -= T.G * dt;
+      b.x += b.vx * dt; b.h += b.vy * dt; b.ang += b.av * dt;
+      if (b.h <= 0 && b.vy < 0 && groundAt(b.x) !== 'water') {
+        b.h = 0;
+        const cj = cupAt(b.x);
+        if (cj >= 0 && Math.abs(b.vx) < T.CUP_V_AIR) { b.x = run.course[cj].cup; b.vx = 0; b.vy = 0; b.sunkHole = cj; b.state = 'sunk'; return 'sunk'; }
+        if (-b.vy > T.BOUNCE_MIN_VY) { b.vy = -b.vy * T.BOUNCE; b.vx *= T.BOUNCE_FRICTION; b.av = b.vx / r; return 'bounce'; }
+        b.vy = 0; b.state = 'roll'; b.av = b.vx / r; return 'land';
+      }
+      if (b.h < -30) { b.state = 'water'; return 'water'; }
+    } else if (b.state === 'roll') {
+      const dec = T.ROLL_DECEL * dt;
+      if (Math.abs(b.vx) <= dec) b.vx = 0; else b.vx -= Math.sign(b.vx) * dec;
+      b.x += b.vx * dt; b.ang += (b.vx / r) * dt;
+      if (groundAt(b.x) === 'water') { b.state = 'air'; b.vy = 0; return null; }
+      const cj = cupAt(b.x);
+      if (cj >= 0 && Math.abs(b.vx) < T.CUP_V) { b.x = run.course[cj].cup; b.vx = 0; b.sunkHole = cj; b.state = 'sunk'; return 'sunk'; }
+      if (b.vx === 0) { b.state = 'rest'; return 'rest'; }
+    }
+    return null;
+  }
+  // Pure: plays a shot of power p from the current resting position and reports where it ends up.
+  function simulateShot(p) {
+    const b = { x: run.ball.x, h: 0, vx: 0, vy: 0, ang: 0, av: 0, state: 'air', sunkHole: -1 };
+    launch(b, p);
+    let t = 0, ev = null;
+    while (t < 8) { ev = stepBall(b, T.STEP); t += T.STEP; if (ev === 'rest' || ev === 'sunk' || ev === 'water') break; }
+    return { state: b.state, x: b.x, t };
+  }
+  // The power whose shot sinks at targetX if one exists, else the one that stops closest to it on land.
+  function solveShot(targetX) {
+    let best = { p: 0.5, err: Infinity };
+    for (let i = 0; i <= 100; i++) {
+      const p = i / 100, res = simulateShot(p);
+      if (res.state === 'sunk' && Math.abs(res.x - targetX) <= T.CUP_R + 1) return p;
+      const err = res.state === 'water' ? 1e9 : Math.abs(res.x - targetX);
+      if (err < best.err) best = { p, err };
+    }
+    return best.p;
+  }
+
+  // ---------- particles & popups ----------
   function popup(text, x, y, o) {
     o = o || {};
     run.popups.push({ text, x, y, t: 0, life: o.life || 1.0, color: o.color || null, size: o.size || 20, spaced: o.spaced !== false });
   }
-  // ---------- particles: small dots and thin rings, nothing else ----------
   function part(o) { run.parts.push(Object.assign({ kind: 'dot', x: 0, y: 0, vx: 0, vy: 0, t: 0, life: 0.5, r: 2, color: '#000', g: 0, size: 46 }, o)); }
   function dots(x, y, n, color, speed, spread, g) {
-    for (let i = 0; i < n; i++) part({ x: x + (Math.random() - 0.5) * spread, y, vx: (Math.random() - 0.5) * speed * 2, vy: -Math.random() * speed - 20, life: 0.4 + Math.random() * 0.3, r: 1.5 + Math.random() * 2, color, g: g == null ? 300 : g });
+    for (let i = 0; i < n; i++) part({ x: x + (Math.random() - 0.5) * spread, y, vx: (Math.random() - 0.5) * speed * 2, vy: -Math.random() * speed - 20, life: 0.4 + Math.random() * 0.3, r: 1.8 + Math.random() * 2.2, color, g: g == null ? 500 : g });
   }
   function ringFx(x, y, color, delay, size) { part({ kind: 'ring', x, y, life: 0.6, color, t: -(delay || 0), size: size || 46 }); }
-  function trail(x, y, color) { part({ x, y, life: 0.3, r: 2 + Math.random() * 1.5, color: hexA(color, 0.45) }); }
 
+  // ---------- input & shots ----------
   function press() {
     if (state !== 'playing' || !run || run.dead || run.demo) return;
-    const f = run.frog;
-    if (f.state !== 'rest') return;
-    f.state = 'charge'; f.charge = 0; run.hinted = true;
+    const b = run.ball;
+    if (b.state !== 'rest') return;
+    b.state = 'charge'; b.charge = 0; run.hinted = true;
     el.hint.classList.add('on');
     Sfx.charge(0);
   }
   function release() {
     el.hint.classList.remove('on');
     if (run && run.hinted) el.hint.classList.add('hidden');
-    if (!run || run.dead || run.frog.state !== 'charge' || run.demo) return;
-    jump();
+    if (!run || run.dead || run.ball.state !== 'charge' || run.demo) return;
+    fire(run.ball.charge / T.T_MAX);
   }
-  function jump() {
-    const f = run.frog;
-    const p = clamp(f.charge / T.T_MAX, 0, 1);
-    const j = jumpParams(p);
-    f.vx = j.vx; f.vy = j.vy; f.state = 'air'; f.power = p; f.x0 = f.x;
-    f.sx = 0.8; f.sy = 1.3;
-    const pad = run.pads[run.cur]; pad.sq = 1.06;
-    dots(f.x, f.y, 6, hexA(accent(), 0.8), 120, 20); ringFx(f.x, f.y, hexA(theme().ink, 0.22), 0, 30);
-    Sfx.charge(-1); Sfx.jump(); haptic('tap');
+  function fire(p) {
+    const b = run.ball;
+    launch(b, p);
+    run.strokes++;
+    run.acc = 0;
+    b.sx = 0.85; b.sy = 1.15;
+    dots(b.x, yGround, 5, hexA(theme().ink, 0.35), 90, 14);
+    Sfx.charge(-1); Sfx.hit(p); haptic('tap');
+    syncHud();
+  }
+
+  function onEvent(ev) {
+    const b = run.ball;
+    if (ev === 'bounce') { b.sy = 0.7; b.sx = 1.25; dots(b.x, yGround, 4, hexA(theme().ink, 0.3), 70, 10); Sfx.bounce(Math.abs(b.vy) / T.BOUNCE); }
+    else if (ev === 'land') { b.sy = 0.85; b.sx = 1.1; Sfx.bounce(120); }
+    else if (ev === 'sunk') { b.holdT = 0; completeHole(b.sunkHole, true); }
+    else if (ev === 'water') { die('Splash'); }
+    else if (ev === 'rest') resolveRest();
+  }
+
+  function resolveRest() {
+    const b = run.ball;
+    const gi = greenIndexAt(b.x);
+    if (gi >= 0) { completeHole(gi, false); return; }
+    let ni = run.cur;
+    while (ni < run.course.length - 1 && b.x > run.course[ni].greenEnd) ni++;
+    if (ni !== run.cur) { run.cur = ni; run.strokes = 1; ensureHoles(); checkTheme(); }
+    if (run.strokes >= T.MAX_STROKES) { die('Three strokes, still off the green'); return; }
+    b.restT = 0;
+    syncHud();
+  }
+
+  function completeHole(hi, sunk) {
+    const b = run.ball, hole = run.course[hi];
+    const first = hi === run.cur && run.strokes === 1;
+    let gained;
+    if (sunk && first) {
+      run.combo++; run.maxCombo = Math.max(run.maxCombo, run.combo);
+      gained = 2 * run.combo; run.results.push('P');
+      popup('PERFECT', hole.cup, yGround - 70, { color: accent(), size: 20 });
+      if (run.combo >= 2) popup('×' + run.combo, hole.cup, yGround - 98, { color: accent(), size: 26, life: 1.2, spaced: false });
+      ringFx(hole.cup, yGround, accent(), 0, 60); ringFx(hole.cup, yGround, accent(), 0.12, 44); dots(hole.cup, yGround, 10, hexA(accent(), 0.9), 170, 24);
+      Sfx.sink(run.combo); haptic('perfect');
+    } else if (sunk) {
+      run.combo = 0; gained = 2; run.results.push('N');
+      popup('IN  +2', hole.cup, yGround - 66, { size: 20 });
+      ringFx(hole.cup, yGround, hexA(theme().ink, 0.4), 0, 44);
+      Sfx.sink(0); haptic('tap');
+    } else {
+      run.combo = 0; gained = 1; run.results.push('N');
+      popup('+1', b.x, yGround - 62, { size: 24, spaced: false });
+      haptic('tap');
+    }
+    run.score += gained; run.holes++;
+    if (!run.demo) { Save.d.totalHoles++; if (run.score > Save.d.best) Save.d.best = run.score; }
+    run.cur = hi + 1; run.strokes = 0; ensureHoles(); checkTheme();
+    if (!sunk) { b.state = 'rest'; b.restT = 0; }
+    syncHud();
+  }
+  function checkTheme() {
+    const th = run.course[run.cur].theme;
+    if (th !== run.theme) { run.themeFrom = run.theme; run.theme = th; run.themeMix = 0; }
   }
 
   function update(dt) {
-    const f = run.frog;
+    const b = run.ball;
     run.t += dt;
-    const cur = run.pads[run.cur];
-
     if (!run.dead) {
-      if (f.state === 'rest' || f.state === 'charge') {
-        f.x = padX(cur) + f.off; f.y = padTop(cur);
-        f.restT += dt;
-      }
-      if (f.state === 'rest') {
-        f.vx = f.vy = 0;
-        const breathe = 1 + 0.02 * Math.sin(run.t * 3);
-        f.sx += (1 - f.sx) * (1 - Math.exp(-dt * 12));
-        f.sy += (breathe - f.sy) * (1 - Math.exp(-dt * 12));
-        cur.sq += (1 - cur.sq) * (1 - Math.exp(-dt * 10));
-        if (run.demo && f.restT > 0.55) {
-          const nxt = run.pads[run.cur + 1];
-          const p = solvePower(f.x, f.y, padX(nxt), padTop(nxt));
-          run.demoTarget = clamp(p + (Math.random() - 0.5) * 0.05, 0, 1) * T.T_MAX;
-          f.state = 'charge'; f.charge = 0;
+      if (b.state === 'rest') {
+        b.restT += dt;
+        b.sx += (1 - b.sx) * (1 - Math.exp(-dt * 12)); b.sy += (1 - b.sy) * (1 - Math.exp(-dt * 12));
+        const sym = SYMMETRY[CHARS[charIndex].shape] || TAU;
+        const flat = Math.round(b.ang / sym) * sym;
+        b.ang += (flat - b.ang) * (1 - Math.exp(-dt * 14));
+        if (run.demo && b.restT > 0.7) {
+          const p = solveShot(run.course[run.cur].cup);
+          run.demoTarget = clamp(p + (Math.random() - 0.5) * 0.03, 0, 1) * T.T_MAX;
+          b.state = 'charge'; b.charge = 0;
         }
-      } else if (f.state === 'charge') {
-        f.charge = Math.min(T.T_MAX, f.charge + dt);
-        const p = f.charge / T.T_MAX;
-        f.sx += (1 + 0.3 * p - f.sx) * (1 - Math.exp(-dt * 14));
-        f.sy += (1 - 0.4 * p - f.sy) * (1 - Math.exp(-dt * 14));
-        cur.sq += (1 - 0.08 * p - cur.sq) * (1 - Math.exp(-dt * 14));
+      } else if (b.state === 'charge') {
+        b.charge = Math.min(T.T_MAX, b.charge + dt);
+        const p = b.charge / T.T_MAX;
+        b.sx += (1 + 0.15 * p - b.sx) * (1 - Math.exp(-dt * 14)); b.sy += (1 - 0.2 * p - b.sy) * (1 - Math.exp(-dt * 14));
         Sfx.charge(p);
-        if (run.demo && f.charge >= run.demoTarget) jump();
-      } else if (f.state === 'air' || f.state === 'fall') {
-        const px = f.x, py = f.y;
-        // exact constant-acceleration step, so the landing spot does not depend on the frame rate
-        f.x += f.vx * dt; f.y += f.vy * dt + 0.5 * T.G * dt * dt; f.vy += T.G * dt;
-        f.look = clamp(f.vx / 300, -1, 1);
-        f.trailT = (f.trailT || 0) + dt;
-        if (f.trailT > 0.045) { f.trailT = 0; trail(f.x, f.y - 17, accent()); }
-        const tx = f.vy < 0 ? 0.85 : 0.92, ty = f.vy < 0 ? 1.25 : 1.1;
-        f.sx += (tx - f.sx) * (1 - Math.exp(-dt * 10)); f.sy += (ty - f.sy) * (1 - Math.exp(-dt * 10));
-        cur.sq += (1 - cur.sq) * (1 - Math.exp(-dt * 10));
-        if (f.state === 'air') {
-          for (let j = run.cur; j < Math.min(run.pads.length, run.cur + 6); j++) {
-            const pad = run.pads[j], cx = padX(pad), top = padTop(pad), left = cx - pad.w / 2, right = cx + pad.w / 2;
-            if (f.vy > 0 && py <= top && f.y >= top) {
-              const k = (top - py) / (f.y - py || 1);
-              const lx = px + (f.x - px) * k;
-              if (lx >= left && lx <= right) { land(j, lx); break; }
-            }
-            if (j > run.cur && px < left - 8 && f.x >= left - 8 && f.y > top + 6) {
-              f.x = left - 9; f.vx = -70; f.state = 'fall'; f.hitReason = 'Hit the side of a pad';
-              dots(f.x, f.y - 10, 5, hexA(theme().ink, 0.5), 80, 6);
-              break;
-            }
-          }
+        if (run.demo && b.charge >= run.demoTarget) fire(b.charge / T.T_MAX);
+      } else if (b.state === 'air' || b.state === 'roll') {
+        run.acc += dt;
+        while (run.acc >= T.STEP) {
+          run.acc -= T.STEP;
+          const ev = stepBall(b, T.STEP);
+          if (ev) { onEvent(ev); if (ev === 'rest' || ev === 'sunk' || ev === 'water') break; }
         }
-        if (f.y > yWater + 26) die(f.hitReason || (f.x < padX(run.pads[run.cur + 1]) ? 'Fell short' : 'Jumped too far'));
+        b.sx += (1 - b.sx) * (1 - Math.exp(-dt * 10)); b.sy += (1 - b.sy) * (1 - Math.exp(-dt * 10));
+      } else if (b.state === 'sunk') {
+        b.holdT += dt;
+        b.h = -26 * clamp(b.holdT / 0.18, 0, 1);
+        if (b.holdT > 0.6) { b.x = run.course[b.sunkHole].cup + 14; b.h = 0; b.ang = 0; b.state = 'rest'; b.restT = 0; }
       }
     } else {
       run.deadT += dt;
-      if (f.state !== 'gone') {
-        f.vy += T.G * dt; f.y += f.vy * dt; f.x += f.vx * dt;
-        if (f.y > H + 80) f.state = 'gone';
-      }
+      if (b.state === 'water') { b.vy -= T.G * dt; b.h += b.vy * dt; b.x += b.vx * dt * 0.3; b.ang += b.av * dt; }
       if (run.demo && run.deadT > 1.4) { run = newRun('play', true); return; }
       if (!run.demo && run.deadT > 0.75 && state === 'playing') finishRun();
     }
 
-    // camera, biome crossfade, particles, popups, shake
-    const camT = f.x - T.FROG_SCREEN_X;
+    const camT = b.x - T.BALL_SCREEN_X;
     run.cam.x += (camT - run.cam.x) * (1 - Math.exp(-dt * 6));
-    if (run.biomeMix < 1) run.biomeMix = Math.min(1, run.biomeMix + dt / 1.2);
-    for (const p of run.parts) { p.t += dt; if (p.kind !== 'ring') { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt; } }
+    if (run.themeMix < 1) run.themeMix = Math.min(1, run.themeMix + dt / 1.2);
+    for (const p of run.parts) { p.t += dt; if (p.kind !== 'ring') { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; } }
     run.parts = run.parts.filter((p) => p.t < p.life);
     for (const p of run.popups) p.t += dt;
     run.popups = run.popups.filter((p) => p.t < p.life);
     run.shake *= Math.exp(-dt * 7);
   }
 
-  function land(j, lx) {
-    const f = run.frog, pad = run.pads[j];
-    const cx = padX(pad), top = padTop(pad);
-    f.x = lx; f.y = top; f.off = lx - cx; f.vx = f.vy = 0;
-    f.state = 'rest'; f.restT = 0; f.sx = 1.45; f.sy = 0.55; pad.sq = 0.9;
-    dots(lx, top, 7, hexA(theme().muted, 0.9), 110, 30);
-    if (j === run.cur) { Sfx.land(); return; } // hopped in place, no score
-    const skipped = j - run.cur - 1;
-    const perfect = Math.abs(f.off) <= T.PERFECT_R;
-    let gained;
-    if (perfect) {
-      run.combo++; run.maxCombo = Math.max(run.maxCombo, run.combo);
-      gained = 2 * run.combo + skipped;
-      run.results.push('P');
-      popup('PERFECT', lx, top - 62, { color: accent(), size: 20 });
-      if (run.combo >= 2) popup('×' + run.combo, lx, top - 90, { color: accent(), size: 26, life: 1.2, spaced: false });
-      ringFx(lx, top + 10, accent(), 0, 60); ringFx(lx, top + 10, accent(), 0.12, 44); dots(lx, top, 10, hexA(accent(), 0.85), 160, 30);
-      Sfx.perfect(run.combo); haptic('perfect');
-    } else {
-      run.combo = 0;
-      gained = 1 + skipped;
-      run.results.push('N');
-      popup('+' + gained, lx, top - 58, { size: 24, spaced: false });
-      Sfx.land(); haptic('tap');
-    }
-    if (skipped > 0) popup('LONG JUMP +' + skipped, lx, top - 118, { size: 14, life: 1.3 });
-    run.score += gained; run.hops++;
-    if (!run.demo) { Save.d.totalHops++; if (run.score > Save.d.best) Save.d.best = run.score; }
-    run.cur = j; ensurePads();
-    if (pad.biome !== run.biome) { run.biomeFrom = run.biome; run.biome = pad.biome; run.biomeMix = 0; }
-    syncHud();
-  }
-
   function die(reason) {
     if (run.dead) return;
     run.dead = true; run.deadReason = reason; run.deadT = 0;
     run.results.push('X');
-    run.shake = 14;
-    const f = run.frog;
-    const inkA = hexA(theme().ink, 0.35);
-    ringFx(f.x, yWater, inkA, 0, 70); ringFx(f.x, yWater, inkA, 0.12, 56); ringFx(f.x, yWater, inkA, 0.24, 42);
-    dots(f.x, yWater, 8, hexA(accent(), 0.8), 140, 16, 600);
-    f.state = 'gone';
+    run.shake = 10;
+    const b = run.ball;
+    if (b.state === 'water') {
+      const w = hexA(mixHex(theme().water, theme().ink, 0.35), 0.9);
+      dots(b.x, yGround + 8, 10, w, 180, 20, 700);
+      ringFx(b.x, yGround + 8, w, 0, 50); ringFx(b.x, yGround + 8, w, 0.12, 36);
+    }
     Sfx.charge(-1);
     if (!run.demo) { Sfx.splash(); haptic('fail'); el.hint.classList.add('hidden'); }
   }
@@ -395,10 +441,10 @@
     state = 'over';
     const before = run.startBest, after = Save.d.best;
     let bestLine = run.score >= after && run.score > before ? 'NEW BEST' : 'BEST ' + fmt(after);
-    if (run.hops > Save.d.bestHops) Save.d.bestHops = run.hops;
+    if (run.holes > Save.d.bestHoles) Save.d.bestHoles = run.holes;
     if (run.maxCombo > Save.d.bestCombo) Save.d.bestCombo = run.maxCombo;
     if (run.mode === 'daily') {
-      run.dailyResult = { day: dayNumber(), score: run.score, hops: run.hops, combo: run.maxCombo, results: run.results.slice(0, 60) };
+      run.dailyResult = { day: dayNumber(), score: run.score, holes: run.holes, combo: run.maxCombo, results: run.results.slice(0, 60) };
       Save.d.daily[todayKey()] = run.dailyResult;
       bestLine = 'DAILY #' + run.dailyResult.day + (run.score > before ? ' · NEW BEST' : '');
     }
@@ -406,109 +452,70 @@
     Save.save();
     const newly = CHARS.filter((c) => c.unlock > before && c.unlock <= after);
     let unlockLine;
-    if (newly.length) unlockLine = 'New character unlocked: ' + newly.map((c) => c.name).join(', ');
-    else { const n = CHARS.find((c) => c.unlock > after); unlockLine = n ? 'Next character at best ' + n.unlock + ' · you have ' + after : 'All characters unlocked'; }
+    if (newly.length) unlockLine = 'New shape unlocked: ' + newly.map((c) => c.name).join(', ');
+    else { const n = CHARS.find((c) => c.unlock > after); unlockLine = n ? 'Next shape at best ' + n.unlock + ' · you have ' + after : 'All shapes unlocked'; }
     showOver({
-      eyebrow: 'Missed', title: run.deadReason,
-      stats: fmt(run.score) + ' pts · ' + run.hops + ' hops · best streak ×' + run.maxCombo,
+      eyebrow: run.deadReason === 'Splash' ? 'Water' : 'Missed', title: run.deadReason,
+      stats: fmt(run.score) + ' pts · ' + run.holes + ' holes · best streak ×' + run.maxCombo,
       best: bestLine, strip: run.results, unlock: unlockLine, daily: run.dailyResult,
     });
   }
 
-  // ---------- drawing: flat shapes, soft depth, a tiny glow ----------
+  // ---------- drawing: flat pastel geometry, nothing else ----------
+  function col(key) { return run.themeMix >= 1 ? THEMES[run.theme][key] : mixHex(THEMES[run.themeFrom][key], THEMES[run.theme][key], run.themeMix); }
+
   function draw() {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
     const cam = run.cam.x;
     ctx.save();
     if (run.shake > 0.3) ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
-    if (run.biomeMix < 1) { drawBackground(THEMES[run.biomeFrom], cam, 1); drawBackground(THEMES[run.biome], cam, run.biomeMix); }
-    else drawBackground(THEMES[run.biome], cam, 1);
-    for (let j = Math.max(0, run.cur - 3); j < run.pads.length; j++) { const p = run.pads[j]; if (padX(p) - p.w / 2 - cam > LOGICAL_W + 30) break; drawPad(p, cam); }
-    const f = run.frog, ch = CHARS[charIndex];
-    if (f.state !== 'gone') drawShape(ctx, ch, f.x - cam, f.y, f.sx, f.sy, true);
-    if (f.state === 'charge') drawChargeRing(f.x - cam, f.y - 17, f.charge / T.T_MAX, ch.color);
-    drawParticles(cam); drawPopups(cam);
-    ctx.restore();
-  }
+    ctx.fillStyle = col('sky'); ctx.fillRect(0, 0, LOGICAL_W, H);
+    ctx.fillStyle = col('sun'); circle(ctx, 296 - ((cam * 0.03) % 600), 118, 42);
+    ctx.fillStyle = col('ground'); ctx.fillRect(0, yGround, LOGICAL_W, H - yGround);
+    ctx.fillStyle = col('groundTop'); ctx.fillRect(0, yGround, LOGICAL_W, 6);
 
-  function drawBackground(t, cam, alpha) {
-    ctx.globalAlpha = alpha;
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, t.bg); g.addColorStop(1, t.bg2);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, LOGICAL_W, H);
-    const span = 900;
-    for (let k = 0; k < 4; k++) {
-      const base = hash01(k * 19 + 3) * span, par = 0.05 + 0.04 * k;
-      const ox = (((base - cam * par) % span) + span) % span - 150;
-      const oy = 80 + hash01(k * 29 + 7) * (yWater - 200);
-      const r = 90 + hash01(k * 41 + 1) * 110;
-      const og = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
-      og.addColorStop(0, hexA(t.orb, 0.34)); og.addColorStop(1, hexA(t.orb, 0));
-      ctx.fillStyle = og; ctx.fillRect(ox - r, oy - r, r * 2, r * 2);
+    const sky = col('sky'), water = col('water'), green = col('green'), ink = col('ink');
+    for (let j = Math.max(0, run.cur - 2); j < run.course.length; j++) {
+      const h = run.course[j];
+      if (h.channelStart - cam > LOGICAL_W + 40) break;
+      if (h.greenEnd - cam < -40) continue;
+      ctx.fillStyle = green; ctx.fillRect(h.greenStart - cam, yGround, h.greenEnd - h.greenStart, H - yGround);
+      gap(h.channelStart - cam, h.channelEnd - h.channelStart, sky, water);
+      if (h.hazard) gap(h.hazard.start - cam, h.hazard.end - h.hazard.start, sky, water);
+      // cup and flag
+      ctx.fillStyle = hexA(THEMES[run.theme].ink, 0.85);
+      ctx.beginPath(); ctx.ellipse(h.cup - cam, yGround + 1, T.CUP_R, 3, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = hexA(THEMES[run.theme].ink, 0.55); ctx.fillRect(h.cup - cam - 1, yGround - 52, 2, 52);
+      ctx.fillStyle = accent(); ctx.beginPath(); ctx.moveTo(h.cup - cam + 1, yGround - 52); ctx.lineTo(h.cup - cam + 22, yGround - 45); ctx.lineTo(h.cup - cam + 1, yGround - 38); ctx.closePath(); ctx.fill();
     }
-    ctx.fillStyle = t.void; ctx.fillRect(0, yWater, LOGICAL_W, H - yWater);
-    ctx.fillStyle = t.base; ctx.fillRect(0, yWater - 0.75, LOGICAL_W, 1.5);
-    ctx.globalAlpha = 1;
-  }
-  function rrTop(g, x, y, w, h, r) {
-    g.beginPath(); g.moveTo(x, y + h);
-    g.lineTo(x, y + r); g.arcTo(x, y, x + r, y, r); g.lineTo(x + w - r, y); g.arcTo(x + w, y, x + w, y + r, r);
-    g.lineTo(x + w, y + h); g.closePath();
-  }
-  function drawPad(p, cam) {
-    const x = padX(p) - cam, top = padTop(p);
-    if (x + p.w / 2 < -20) return;
-    const t = THEMES[p.biome];
-    const bottom = yWater + 1;
-    ctx.save();
-    ctx.translate(x, bottom); ctx.scale(1, p.sq); ctx.translate(-x, -bottom);
-    const g = ctx.createLinearGradient(0, top, 0, bottom);
-    g.addColorStop(0, t.pad[0]); g.addColorStop(1, t.pad[1]);
-    ctx.shadowColor = t.padShadow; ctx.shadowBlur = 18; ctx.shadowOffsetY = 8;
-    rrTop(ctx, x - p.w / 2, top, p.w, bottom - top, 9); ctx.fillStyle = g; ctx.fill();
-    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    ctx.fillStyle = t.marker; circle(ctx, x, top + 10, 3);
-    if (p.move) {
-      ctx.strokeStyle = hexA(t.marker, 0.35); ctx.lineWidth = 1.5; ctx.lineCap = 'round';
-      const l = x - p.w / 2 + 9, r = x + p.w / 2 - 9, y = top + 10;
-      ctx.beginPath(); ctx.moveTo(l + 4, y - 3); ctx.lineTo(l, y); ctx.lineTo(l + 4, y + 3); ctx.moveTo(r - 4, y - 3); ctx.lineTo(r, y); ctx.lineTo(r - 4, y + 3); ctx.stroke();
-    }
+
+    const b = run.ball, ch = CHARS[charIndex];
+    if (b.state !== 'gone') drawShape(ctx, ch, b.x - cam, yGround - b.h - T.BALL_R, b.sx, b.sy, b.ang);
+    if (b.state === 'sunk') { ctx.fillStyle = green; ctx.fillRect(b.x - cam - 20, yGround, 40, 34); ctx.fillStyle = hexA(THEMES[run.theme].ink, 0.85); ctx.beginPath(); ctx.ellipse(b.x - cam, yGround + 1, T.CUP_R, 3, 0, 0, TAU); ctx.fill(); }
+    if (b.state === 'water' && b.h < -T.BALL_R) { ctx.fillStyle = water; ctx.fillRect(b.x - cam - 30, yGround + 6, 60, H - yGround); }
+    if (b.state === 'charge') drawChargeRing(b.x - cam, yGround - T.BALL_R, b.charge / T.T_MAX, ch.color, ink);
+    drawParticles(cam); drawPopups(cam, ink);
     ctx.restore();
   }
-  function shapePath(g, shape, cx, cy, r) {
-    g.beginPath();
-    switch (shape) {
-      case 'circle': g.arc(cx, cy, r, 0, TAU); break;
-      case 'triangle': { const R = r * 1.18; for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R + r * 0.16); } g.closePath(); break; }
-      case 'diamond': { const R = r * 1.2; g.moveTo(cx, cy - R); g.lineTo(cx + R, cy); g.lineTo(cx, cy + R); g.lineTo(cx - R, cy); g.closePath(); break; }
-      case 'hexagon': { const R = r * 1.1; for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * TAU / 6; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); break; }
-      case 'star': { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5; const R = i % 2 === 0 ? r * 1.25 : r * 0.58; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); break; }
-      case 'plus': { const w = r * 0.4, R = r * 1.05; g.moveTo(cx - w, cy - R); g.lineTo(cx + w, cy - R); g.lineTo(cx + w, cy - w); g.lineTo(cx + R, cy - w); g.lineTo(cx + R, cy + w); g.lineTo(cx + w, cy + w); g.lineTo(cx + w, cy + R); g.lineTo(cx - w, cy + R); g.lineTo(cx - w, cy + w); g.lineTo(cx - R, cy + w); g.lineTo(cx - R, cy - w); g.lineTo(cx - w, cy - w); g.closePath(); break; }
-      default: { const rad = 7; g.moveTo(cx - r + rad, cy - r); g.arcTo(cx + r, cy - r, cx + r, cy + r, rad); g.arcTo(cx + r, cy + r, cx - r, cy + r, rad); g.arcTo(cx - r, cy + r, cx - r, cy - r, rad); g.arcTo(cx - r, cy - r, cx + r, cy - r, rad); g.closePath(); }
-    }
+  function gap(x, w, sky, water) {
+    if (w <= 0) return;
+    ctx.fillStyle = sky; ctx.fillRect(x, yGround, w, 6);
+    ctx.fillStyle = water; ctx.fillRect(x, yGround + 6, w, H - yGround);
   }
-  // The player: one flat shape with a vertical gradient for depth and a soft glow in its own color.
-  function drawShape(g, ch, x, y, sx, sy, glow) {
-    g.save(); g.translate(x, y); g.scale(sx, sy);
-    const S = 34, c = ch.color;
-    const grad = g.createLinearGradient(0, -S, 0, 0);
-    grad.addColorStop(0, shade(c, 0.24)); grad.addColorStop(1, shade(c, -0.14));
-    if (glow) { g.shadowColor = hexA(c, 0.55); g.shadowBlur = 18; g.shadowOffsetY = 3; }
-    g.fillStyle = grad; g.strokeStyle = grad; g.lineWidth = 3; g.lineJoin = 'round';
-    shapePath(g, ch.shape, 0, -S / 2, S / 2 - 1.5);
+  // The player: one flat shape in its own pastel, rotating with its spin. Squash is applied in world axes before the rotation.
+  function drawShape(g, ch, x, y, sx, sy, ang) {
+    g.save(); g.translate(x, y); g.scale(sx, sy); g.rotate(ang);
+    g.fillStyle = ch.color; g.strokeStyle = ch.color; g.lineWidth = 2; g.lineJoin = 'round';
+    shapePath(g, ch.shape, 0, 0, T.BALL_R);
     g.fill(); if (ch.shape !== 'circle') g.stroke();
-    g.shadowColor = 'transparent'; g.shadowBlur = 0; g.shadowOffsetY = 0;
+    g.fillStyle = 'rgba(59,58,74,.28)'; circle(g, T.BALL_R * 0.45, 0, 2.2);
     g.restore();
   }
-  function drawChargeRing(x, y, p, color) {
-    const r = 31;
+  function drawChargeRing(x, y, p, color, ink) {
+    const r = 26;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = hexA(theme().ink, 0.12); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
-    if (p > 0.005) {
-      ctx.strokeStyle = color; ctx.shadowColor = hexA(color, 0.6); ctx.shadowBlur = 10;
-      ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke();
-      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-    }
+    ctx.strokeStyle = hexA(THEMES[run.theme].ink, 0.12); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
+    if (p > 0.005) { ctx.strokeStyle = color; ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke(); }
   }
   function drawParticles(cam) {
     for (const p of run.parts) {
@@ -516,19 +523,19 @@
       const k = p.t / p.life, a = 1 - k;
       ctx.globalAlpha = a;
       if (p.kind === 'dot') { ctx.fillStyle = p.color; circle(ctx, p.x - cam, p.y, p.r * (0.5 + 0.5 * a)); }
-      else if (p.kind === 'ring') { ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x - cam, p.y, 4 + k * p.size, 0, TAU); ctx.stroke(); }
+      else { ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x - cam, p.y, 4 + k * p.size, 0, TAU); ctx.stroke(); }
     }
     ctx.globalAlpha = 1;
   }
-  function drawPopups(cam) {
+  function drawPopups(cam, ink) {
     for (const p of run.popups) {
       const a = 1 - p.t / p.life;
       const s = p.t < 0.12 ? 0.7 + (p.t / 0.12) * 0.3 : 1;
       ctx.save(); ctx.globalAlpha = a;
-      ctx.translate(p.x - cam, p.y - p.t * 34); ctx.scale(s, s);
+      ctx.translate(clamp(p.x - cam, 72, LOGICAL_W - 72), p.y - p.t * 34); ctx.scale(s, s);
       ctx.font = (p.spaced ? '600 ' : '300 ') + p.size + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       try { ctx.letterSpacing = p.spaced ? '0.22em' : '0em'; } catch (e) { /* older engines */ }
-      ctx.fillStyle = p.color || theme().ink;
+      ctx.fillStyle = p.color || ink;
       ctx.fillText(p.text, p.spaced ? p.size * 0.11 : 0, 0);
       ctx.restore();
     }
@@ -542,11 +549,12 @@
     const len = el.score.textContent.length;
     el.score.classList.toggle('mid', len === 5);
     el.score.classList.toggle('long', len > 5);
-    el.combo.textContent = run.combo >= 2 ? 'Streak ×' + run.combo : run.combo === 1 ? 'Perfect' : '';
-    const bestTxt = fmt(Math.max(Save.d.best, run.score));
-    el.best.textContent = 'Best ' + bestTxt;
-    el.mode.textContent = (run.mode === 'daily' ? 'Daily · ' : '') + THEMES[run.biome].name;
-    el.game.dataset.theme = THEMES[run.biome].dark ? 'dark' : 'light';
+    const onFairway = run.strokes >= 1 && run.ball.state === 'rest';
+    if (onFairway) { el.combo.textContent = 'Stroke ' + Math.min(run.strokes + 1, T.MAX_STROKES) + ' of ' + T.MAX_STROKES; el.combo.classList.add('stroke'); }
+    else { el.combo.textContent = run.combo >= 2 ? 'Streak ×' + run.combo : run.combo === 1 ? 'Perfect' : ''; el.combo.classList.remove('stroke'); }
+    el.best.textContent = 'Best ' + fmt(Math.max(Save.d.best, run.score));
+    el.mode.textContent = (run.mode === 'daily' ? 'Daily · ' : '') + THEMES[run.theme].name;
+    el.game.dataset.theme = THEMES[run.theme].dark ? 'dark' : 'light';
   }
   function renderMenu() {
     const ch = CHARS[charIndex];
@@ -557,20 +565,20 @@
     const g = el.preview.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 112, 112);
     g.setTransform(2, 0, 0, 2, 0, 0);
-    if (!unlocked) g.globalAlpha = 0.22;
-    drawShape(g, ch, 28, 46, 1, 1, unlocked);
+    if (!unlocked) g.globalAlpha = 0.25;
+    drawShape(g, ch, 28, 28, 1, 1, -0.35);
     if (!unlocked) {
       g.globalAlpha = 1; const ink = THEMES[0].ink;
-      g.strokeStyle = ink; g.lineWidth = 2; g.lineCap = 'round'; g.beginPath(); g.arc(28, 27, 5, Math.PI, 0); g.stroke();
-      g.fillStyle = ink; rr(g, 21, 27, 14, 11, 3); g.fill();
+      g.strokeStyle = ink; g.lineWidth = 2; g.lineCap = 'round'; g.beginPath(); g.arc(28, 24, 5, Math.PI, 0); g.stroke();
+      g.fillStyle = ink; rr(g, 21, 24, 14, 11, 3); g.fill();
     }
-    el.mStats.textContent = 'Best ' + fmt(Save.d.best) + '  ·  streak ×' + Save.d.bestCombo + '  ·  ' + fmt(Save.d.totalHops) + ' hops';
+    el.mStats.textContent = 'Best ' + fmt(Save.d.best) + '  ·  streak ×' + Save.d.bestCombo + '  ·  ' + fmt(Save.d.totalHoles) + ' holes';
     el.play.disabled = !unlocked;
-    el.play.textContent = unlocked ? 'PLAY' : 'LOCKED';
+    el.play.textContent = unlocked ? 'Play' : 'Locked';
     el.mDots.textContent = '';
     CHARS.forEach((c, i) => { const s = document.createElement('span'); if (i === charIndex) s.className = 'on'; else if (c.unlock > Save.d.best) s.className = 'locked'; el.mDots.appendChild(s); });
     const done = Save.d.daily[todayKey()];
-    el.daily.innerHTML = done ? 'Daily done<small>' + fmt(done.score) + ' pts · ' + done.hops + ' hops · share</small>' : 'Daily #' + dayNumber() + '<small>one try · same for everyone</small>';
+    el.daily.innerHTML = done ? 'Daily done<small>' + fmt(done.score) + ' pts · ' + done.holes + ' holes · share</small>' : 'Daily #' + dayNumber() + '<small>one try · same for everyone</small>';
     el.soundBtn.textContent = 'Sound: ' + (Save.d.sound ? 'on' : 'off');
   }
   function showMenu() {
@@ -595,12 +603,12 @@
   }
   function shareText(res) {
     const url = location.href.split(/[?#]/)[0];
-    return 'Hop 🐸 Daily #' + res.day + '\n' + fmt(res.score) + ' pts · ' + res.hops + ' hops · best streak ×' + res.combo + '\n' + stripText(res.results) + '\n' + url;
+    return 'Hop ⛳ Daily #' + res.day + '\n' + fmt(res.score) + ' pts · ' + res.holes + ' holes · best streak ×' + res.combo + '\n' + stripText(res.results) + '\n' + url;
   }
   async function share(text) {
-    try { if (navigator.share) { await navigator.share({ text }); return 'SHARED'; } } catch (e) { if (e && e.name === 'AbortError') return 'SHARE'; }
-    try { await navigator.clipboard.writeText(text); return 'COPIED'; } catch (e) { /* ignore */ }
-    return 'SHARE';
+    try { if (navigator.share) { await navigator.share({ text }); return 'Shared'; } } catch (e) { if (e && e.name === 'AbortError') return 'Share'; }
+    try { await navigator.clipboard.writeText(text); return 'Copied'; } catch (e) { /* ignore */ }
+    return 'Share';
   }
   function showOver(o) {
     state = 'over';
@@ -609,19 +617,19 @@
     el.oStrip.textContent = '';
     (o.strip || []).slice(0, 60).forEach((r) => { const d = document.createElement('span'); d.className = r === 'P' ? 'p' : r === 'X' ? 'x' : 'n'; el.oStrip.appendChild(d); });
     show(el.oAgain, !o.daily); show(el.oShare, !!o.daily);
-    el.oShare.textContent = 'SHARE';
+    el.oShare.textContent = 'Share';
     el.oShare.onclick = o.daily ? async () => { el.oShare.textContent = await share(shareText(o.daily)); } : null;
     show(el.hint, false); show(el.menu, false); show(el.pause, false); show(el.hud, true); show(el.over, true);
   }
   function showDailyDone(done) {
     run = newRun('play', true);
-    showOver({ eyebrow: 'DAILY #' + done.day + ' · DONE', title: fmt(done.score) + ' points', stats: done.hops + ' hops · best streak ×' + done.combo, best: 'COME BACK TOMORROW', strip: done.results, unlock: '', daily: done });
+    showOver({ eyebrow: 'Daily #' + done.day + ' · done', title: fmt(done.score) + ' points', stats: done.holes + ' holes · best streak ×' + done.combo, best: 'COME BACK TOMORROW', strip: done.results, unlock: '', daily: done });
     show(el.hud, false);
   }
   function pause() {
     if (state !== 'playing') return;
     state = 'paused';
-    if (run.frog.state === 'charge') { run.frog.state = 'rest'; run.frog.charge = 0; }
+    if (run.ball.state === 'charge') { run.ball.state = 'rest'; run.ball.charge = 0; }
     el.hint.classList.remove('on'); Sfx.charge(-1);
     show(el.pause, true);
   }
@@ -682,9 +690,9 @@
 
   // Exposed for automated tests and console tuning.
   window.Hop = {
-    get state() { return state; }, get run() { return run; }, get charIndex() { return charIndex; }, get yWater() { return yWater; }, get H() { return H; },
+    get state() { return state; }, get run() { return run; }, get charIndex() { return charIndex; }, get yGround() { return yGround; }, get H() { return H; },
     start: startRun, menu: showMenu, save: Save, data: DATA, press, release, sync: syncHud,
-    solvePower, landingX, landingT, padTop, padX: (p) => padX(p), padXAt: (p, t) => p.x + (p.move ? p.move.amp * Math.sin(TAU * t / p.move.period + p.move.phase) : 0),
-    jumpWithPower(p) { if (!run || run.dead || run.frog.state !== 'rest') return false; run.frog.state = 'charge'; run.frog.charge = clamp(p, 0, 1) * T.T_MAX; jump(); return true; },
+    simulateShot, solveShot, groundAt,
+    hitWithPower(p) { if (!run || run.dead || run.ball.state !== 'rest') return false; fire(p); return true; },
   };
 })();

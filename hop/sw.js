@@ -1,6 +1,6 @@
 /* Hop service worker: network first, cache fallback, so the game works offline
    in the metro and still picks up updates when online. */
-const CACHE = 'hop-v1';
+const CACHE = 'hop-v2';
 const ASSETS = ['./', './index.html', './style.css', './game.js', './data.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-180.png'];
 
 self.addEventListener('install', (e) => {

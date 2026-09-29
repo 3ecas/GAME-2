@@ -7,8 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hop">
-<meta name="theme-color" content="#f7f4ee">
-<meta name="description" content="Hold to charge, release to jump, land dead center. A one-thumb hopper for the metro.">
+<meta name="theme-color" content="#f7f1e6">
+<meta name="description" content="Hold to charge, release to hit. Land on the green, roll into the cup. A one-thumb chip-shot game for the metro.">
 <title>Hop</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -26,14 +26,14 @@
       <div class="label right" id="hud-best">BEST 0</div>
     </div>
     <div class="hud-bottom">
-      <div id="hud-hint" class="hint">Hold to jump</div>
+      <div id="hud-hint" class="hint">Hold to hit</div>
     </div>
   </div>
 
   <div id="menu" class="layer overlay">
-    <div class="eyebrow">Dead center</div>
+    <div class="eyebrow">Chip and roll</div>
     <h1 class="title">HOP</h1>
-    <p class="sub">Hold to charge, release to jump.<br>Land on the dot for a streak.</p>
+    <p class="sub">Hold to charge, release to hit.<br>Land on the green, roll into the cup.</p>
     <div class="picker">
       <button class="arrow" id="prev" aria-label="Previous character">‹</button>
       <div class="char-card"><canvas id="m-preview" width="112" height="112"></canvas><div style="min-width:0"><div class="kind" id="m-kind">Shape</div><div class="cname" id="m-name">Square</div></div></div>
@@ -49,7 +49,7 @@
   <div id="over" class="layer overlay hidden">
     <div class="eyebrow" id="o-eyebrow">Missed</div>
     <div class="reason" id="o-title">Fell short</div>
-    <div class="big" id="o-stats">0 pts · 0 hops · best streak ×0</div>
+    <div class="big" id="o-stats">0 pts · 0 holes · best streak ×0</div>
     <div class="bestline" id="o-best"></div>
     <div class="strip" id="o-strip"></div>
     <div class="unlock" id="o-unlock"></div>
@@ -65,14 +65,12 @@
 
   <div id="help" class="layer overlay hidden">
     <div class="card">
-      <div><b>Hold</b> anywhere to charge. The ring fills; the longer you hold, the further you fly. <b>Release</b> to jump.</div>
-      <div>Land on the next pad. Miss it and the run ends.</div>
-      <div>Land on the <b>dot in the middle</b> for a perfect. Every perfect in a row is worth more: 2, 4, 6, 8…</div>
-      <div>Any other landing is worth 1 and resets the streak.</div>
-      <div>Two pads close together? <b>Jump over one</b> for a bonus.</div>
-      <div>Higher pads need a bit more power. Some pads drift from side to side.</div>
-      <div>Every day has one <b>Daily</b> run, the same pads for everyone. One try.</div>
-      <button class="btn secondary" id="help-close" style="margin-top:6px">GOT IT</button>
+      <div><b>Hold</b> anywhere to charge, <b>release</b> to hit. The ring shows the power.</div>
+      <div>The shape flies, bounces, and rolls out. Stop it on the <b>green</b> to move to the next hole.</div>
+      <div>Roll it into the <b>cup</b> on your first stroke for a perfect. Every perfect in a row is worth more: 2, 4, 6, 8…</div>
+      <div>Stopped short on the fairway? You get up to <b>three strokes</b> per hole. Water is a miss.</div>
+      <div>Every day has one <b>Daily</b> course, the same for everyone. One try.</div>
+      <button class="btn secondary" id="help-close" style="margin-top:6px">Got it</button>
     </div>
   </div>
 </div>
