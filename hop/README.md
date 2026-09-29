@@ -1,6 +1,6 @@
 # Hop
 
-A square, a mountain, a slingshot. Pull back, release, and the square launches the opposite way. Gravity, spin, bounce, slide and friction do the rest. The score is the highest point you touch, in meters, and the best height is kept. Flat pastel fills and nothing else: no background, no shadows, no round shapes.
+A square, a stepped mountain, a slingshot. Pull back, release, and the square launches the opposite way. Gravity, spin, bounce, skid and friction do the rest. The score is the highest point you touch, in meters, and the best height is kept. Flat pastel fills and nothing else: no background, no shadows, no round shapes, no slopes. Everything is a straight line at a right angle.
 
 ## Play
 
@@ -11,9 +11,9 @@ A square, a mountain, a slingshot. Pull back, release, and the square launches t
 
 1. The square rests on a ledge. A pull shows a band toward the finger and a dashed line the way the square will go, its length showing the power.
 2. On release it flies on a real parabola, spinning.
-3. It is a rigid body: its four corners hit the mountain, not a point under it. A corner that lands first tips the square over; a face that lands flat stops it. Impacts bounce a little, friction acts at the corners, and both put torque on the body, so it tumbles, skids and rights itself the way a block does.
-4. Flat ledges and gentle slopes (under about 23°) let it come to rest on a face. On steeper ground friction cannot hold it: it slides or tumbles back down, over edges and into the air again, until it finds a ledge lower down. The rewind is the physics, not a menu.
-5. Walls are just steep surfaces: corners bounce off them. Crevasses are slots in the mountain: fall into one and the run ends. Falling to the foot of the mountain, or twelve seconds without touching anything, ends it too.
+3. It is a rigid body: its four corners hit the mountain, not a point under it. A corner that lands first tips the square over; a face that lands flat stops it. Impacts bounce a little, friction acts at the corners, and both put torque on the body, so it tumbles, skids and rights itself the way a block does. It never changes shape.
+4. A block does not roll. Once two corners sit on the same surface the square is lying on a face: its spin is killed and the face is kept flush, so it skids to a stop without turning. It only tips when a single corner catches an edge, the way a block does. Land short and a corner clips the step: the square tumbles back down to the ledge below, over edges and into the air again, until it comes to rest. The rewind is the physics, not a menu.
+5. Steps are vertical: hit one in flight and the square bounces off it and drops. Crevasses are slots in the mountain: fall into one and the run ends. Falling to the foot of the mountain, or twelve seconds without touching anything, ends it too.
 6. Every ground contact updates the highest point reached. A rest higher than the last rest shows the meters gained; a rest lower shows where you slid back to.
 
 A run is a minute or a few. Restart is one tap.
@@ -26,13 +26,15 @@ Physics runs on a fixed 1/240 s step inside an accumulator, so every phone plays
 
 All numbers live in `data.js`. Gravity 1800 px/s², launch speed up to 820 px/s at a full 140 px pull, so a full-power launch can gain at most about 187 px (19 m) straight up, or carry about 370 px on the flat.
 
-Each fixed step moves and rotates the square, then runs three passes over its four corners. A corner below the mountain's outline is pushed out toward the nearest point of the outline (crevasse walls and floors are part of the outline, so a corner is never pushed up through rock). If the corner is moving into the surface it receives a normal impulse with restitution 0.25, or none at all below 40 px/s so resting contacts stay still, then a Coulomb friction impulse capped at 0.42 times the normal impulse. Both impulses act at the corner, so they change the spin as well as the velocity; the moment of inertia is that of a uniform square. The square is asleep, and can be launched, after a quarter second in contact with speed under 14 px/s and spin under 0.7 rad/s. Two safety nets exist for things that should never happen: a center found inside rock is lifted onto the surface, and twelve seconds without any contact counts as a fall.
+Each fixed step moves and rotates the square, then runs three passes over its four corners. A corner below the mountain's outline is pushed out toward the nearest point of the outline (crevasse walls and floors are part of the outline, so a corner is never pushed up through rock). If the corner is moving into the surface it receives a normal impulse with restitution 0.25, or none at all below 40 px/s so resting contacts stay still, then a Coulomb friction impulse capped at 0.6 times the normal impulse. When two corners touch one surface, the spin is damped to a fifth per step and the face is pulled flush with the surface, so the square slides like a block rather than rolling like a wheel. Both impulses act at the corner, so they change the spin as well as the velocity; the moment of inertia is that of a uniform square. The square is asleep, and can be launched, after a quarter second in contact with speed under 14 px/s and spin under 0.7 rad/s. Two safety nets exist for things that should never happen: a center found inside rock is lifted onto the surface, and twelve seconds without any contact counts as a fall.
 
-`simulateLaunch(vx, vy)` runs the same integrator without side effects and `solveTo(ledge)` scans angles and powers for a launch that rests on a given ledge; the demo behind the menu uses it, and so do the tests.
+`simulateLaunch(vx, vy)` runs the same integrator without side effects and `solveTo(ledge)` scans angles and powers for a launch that rests on a given ledge. `solveNext()` adds the move a stuck player makes: when nothing reaches the next ledge from where the square stands (flush against a step, say), it hops elsewhere on the same ledge and tries from there. The demo behind the menu uses it, and so do the tests.
 
 ## The mountain
 
-The mountain is one polyline generated left to right and upward: flat safe ledges separated by obstacles, at most two obstacles between ledges. Obstacles are rising slopes (18–56°, steeper with height), vertical steps (20–100 px), crevasses (30–110 px wide, 200 px deep) and the occasional descent. Each obstacle pair is checked against a full pull from the end of the last ledge: it may not demand more than 135 px of height gain or more than 80 percent of the theoretical range for that gain, so the next ledge is always reachable, even if not easily. Difficulty ramps over the first 300 m of climb. One pixel is 10 cm; height marks appear every 50 m.
+The mountain is one polyline of horizontals and verticals generated left to right: flat ledges separated by one or two obstacles. Obstacles are steps up (20–100 px, taller with height), crevasses (30–110 px wide, 200 px deep) and the occasional step down (20–70 px). Steps have no width, so two obstacles in a row come only as a crevasse whose far rim is the foot of a step, or a step down straight into a crevasse; any other pair would put two verticals at one x and make a fin or a crack. Ledges shrink from 60–120 px to 44–90 px as the climb goes on, and no group may ask for more than 135 px of height in one launch.
+
+Every group is proven before it is kept: the generator test-flies launches from the middle of the previous ledge with the real physics (six angles, 24 powers) and keeps the group only if at least five of them come to rest on the new ledge. A typical ledge gets about 27. A group that fails is rolled again a little smaller, up to eight times, then a modest single step goes in. The run starts with 700 px of mountain and adds one attempt per frame while the square rests, so nothing stalls a flight. Difficulty ramps over the first 300 m of climb. One pixel is 10 cm; height marks appear every 50 m.
 
 ## Palettes
 
@@ -44,14 +46,14 @@ One mountain per day, seeded from the date so everyone climbs the same one. One 
 
 ## Feel
 
-- Squash toward the pull while aiming, a stretch on launch, a squash scaled by each impact, spin in the air, and the tumble, skid or clean landing that the corners produce.
+- The square is rigid: no squash or stretch, only spin in the air and the tumble, skid or clean landing that the corners produce.
 - Particles are tiny spinning squares on launch and on bounces.
 - Optional synthesized sound: a rising tone while pulling, a thock on launch, ticks on bounces, a two-note chime on gaining height, a low drop on a fall. Fully playable on mute.
 - Haptics go through the same `haptic()` hook as Next Stop. The game pauses itself in the background and cancels a pull in progress.
 
 ## Tech
 
-Vanilla JavaScript, one canvas, no dependencies, no build step. Logical width 390 px, a 2D camera that keeps the square left of center and at 62 percent of the height. Progress is in `localStorage` under `hop.v4`. `window.Hop` exposes state plus `simulateLaunch`, `solveTo`, `groundAt`, `nextLedge`, `aimVector` and `launch` for tests and tuning. Installable and offline capable via `manifest.webmanifest` and `sw.js`.
+Vanilla JavaScript, one canvas, no dependencies, no build step. Logical width 390 px, a 2D camera that keeps the square left of center and at 62 percent of the height. Progress is in `localStorage` under `hop.v4`. `window.Hop` exposes state plus `start(mode, seed)`, `simulateLaunch`, `solveTo`, `solveNext`, `reachable`, `nextLedge`, `aimVector`, `launch` and a synchronous `settle()` for tests and tuning. Installable and offline capable via `manifest.webmanifest` and `sw.js`.
 
 ## Ship to the App Store
 

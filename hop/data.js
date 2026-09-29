@@ -8,7 +8,9 @@
      SIZE              side of the square
      BOUNCE            restitution of a corner hitting the mountain (0 = dead, 1 = perfect bounce)
      BOUNCE_V          impacts slower than this do not bounce at all, so resting contacts stay still
-     MU                Coulomb friction at the contact corners; a face rests on slopes up to about atan(MU)
+     MU                Coulomb friction at the contact corners
+     FACE_DAMP         fraction of spin kept per step while lying on a face (a block slides, it does not roll)
+     FACE_SNAP         how fast a face is pulled flush with the surface it lies on
      SPIN              spin given on launch, as a fraction of speed over half the side
      SLOP / CORR       penetration tolerance and the fraction corrected per step (keeps corners out of the rock)
      REST_V / REST_W   linear and angular speed below which the square counts as still
@@ -18,30 +20,30 @@
      CAM_X / CAM_Y     where the square sits on screen, as fractions of width and height
      M_PER_PX          meters of height per world pixel
      RAMP_M            meters of climb over which difficulty ramps
-     LEDGE             flat safe ledge length, [[min,max] at start, [min,max] at full difficulty]
-     SLOPE_DEG         slope steepness
-     GAIN              height gained by one slope
-     WALL_H            height of a vertical step
+     LEDGE             flat ledge length, [[min,max] at start, [min,max] at full difficulty]
+     WALL_H            height of a step up
      HOLE_W            crevasse width
      HOLE_DEPTH        how far down a crevasse goes before the fall counts
-     DROP              height lost by an occasional descent
-     LEDGE_P           chance of a ledge after an obstacle, start and full difficulty
+     DROP              height of an occasional step down
+     LEDGE_P           chance that only one obstacle separates two ledges, start and full difficulty
      MAX_GAIN          height one launch can be asked to gain between two ledges
-     REACH             fraction of the theoretical full-pull range the course may demand
      THEME_M           meters per palette
+
+   The mountain has no slopes: only flat ledges, vertical steps and crevasses. Every ledge is proven reachable
+   from the middle of the one before it by test-flying launches with the real physics while it is generated.
 
    themes: flat colors only. `dark` flips the UI to light text.
 */
 window.HOP_DATA = {
   tuning: {
     G: 1800, V_MAX: 820, DRAG_MAX: 140, DEADZONE: 12, SIZE: 26,
-    BOUNCE: 0.25, BOUNCE_V: 40, MU: 0.42, SPIN: 0.3, SLOP: 0.2, CORR: 0.85,
+    BOUNCE: 0.25, BOUNCE_V: 40, MU: 0.6, FACE_DAMP: 0.2, FACE_SNAP: 0.35, SPIN: 0.3, SLOP: 0.2, CORR: 0.85,
     REST_V: 14, REST_W: 0.7, REST_TIME: 0.25, AIR_TIMEOUT: 12, STEP: 1 / 240,
     CAM_X: 0.42, CAM_Y: 0.62,
     M_PER_PX: 0.1, RAMP_M: 300,
-    LEDGE: [[60, 120], [34, 80]], SLOPE_DEG: [[18, 34], [26, 56]], GAIN: [[30, 80], [60, 130]],
-    WALL_H: [[20, 45], [40, 100]], HOLE_W: [[30, 60], [50, 110]], HOLE_DEPTH: 200, DROP: [20, 70],
-    LEDGE_P: [0.95, 0.6], MAX_GAIN: 135, REACH: 0.8, THEME_M: 60,
+    LEDGE: [[60, 120], [44, 90]],
+    WALL_H: [[20, 50], [40, 100]], HOLE_W: [[30, 60], [50, 110]], HOLE_DEPTH: 200, DROP: [20, 70],
+    LEDGE_P: [0.95, 0.6], MAX_GAIN: 135, THEME_M: 60,
   },
   square: '#f28b82',
   themes: [
