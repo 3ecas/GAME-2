@@ -1,7 +1,7 @@
 {
   "name": "Hop",
   "short_name": "Hop",
-  "description": "Hold to charge, release to hit. Land on the green, roll into the cup. A one-thumb chip-shot game for the metro.",
+  "description": "Pull back, release, land on the next platform. A one-thumb slingshot hopper for the metro.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

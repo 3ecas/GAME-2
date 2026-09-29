@@ -49,7 +49,7 @@ html, body {
 .combo { font-size: 11px; font-weight: 600; letter-spacing: .26em; text-transform: uppercase; min-height: 14px; color: var(--accent); }
 .combo.stroke { color: var(--muted); }
 .hud-bottom { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.hint { font-size: 11px; font-weight: 600; letter-spacing: .3em; text-transform: uppercase; color: var(--ink); padding: 12px 22px; border-radius: 999px; background: var(--panel); animation: pulse 1.6s ease-in-out infinite; }
+.hint { font-size: 11px; font-weight: 600; letter-spacing: .3em; text-transform: uppercase; color: var(--ink); padding: 12px 22px; background: var(--panel); animation: pulse 1.6s ease-in-out infinite; }
 .hint.on { color: var(--ink); background: var(--accent); animation: none; }
 @keyframes pulse { 0%,100% { opacity: .6; } 50% { opacity: 1; } }
 
@@ -66,11 +66,11 @@ h1.title { font-size: 72px; line-height: 1; font-weight: 700; letter-spacing: .1
 .char-card .kind { font-size: 10px; font-weight: 600; letter-spacing: .26em; text-transform: uppercase; color: var(--muted); }
 .char-card .cname { font-size: 22px; font-weight: 400; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .dots { display: flex; gap: 8px; }
-.dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.dots span { width: 6px; height: 6px; background: var(--line); }
 .dots span.on { background: var(--accent); }
 .dots span.locked { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .stats { color: var(--muted); font-weight: 400; font-size: 13px; letter-spacing: .04em; min-height: 18px; }
-.btn { pointer-events: auto; width: min(100%, 300px); padding: 17px 20px; border-radius: 999px; border: 0; font: inherit; font-weight: 600; font-size: 14px; letter-spacing: .28em; text-transform: uppercase; color: var(--ink); background: var(--accent); }
+.btn { pointer-events: auto; width: min(100%, 300px); padding: 17px 20px; border-radius: 4px; border: 0; font: inherit; font-weight: 600; font-size: 14px; letter-spacing: .28em; text-transform: uppercase; color: var(--ink); background: var(--accent); }
 .btn:active { opacity: .75; }
 .btn.secondary { background: var(--panel); color: var(--ink); }
 .btn[disabled] { opacity: .35; }
@@ -83,9 +83,9 @@ h1.title { font-size: 72px; line-height: 1; font-weight: 700; letter-spacing: .1
 #over .bestline { color: var(--accent); font-weight: 600; letter-spacing: .28em; font-size: 11px; text-transform: uppercase; }
 #over .unlock { color: var(--muted); font-weight: 400; font-size: 13px; }
 #over .strip { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 280px; }
-#over .strip span { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); opacity: .5; }
+#over .strip span { width: 8px; height: 8px; background: var(--accent); opacity: 1; }
 #over .strip span.p { background: var(--accent); opacity: 1; }
 #over .strip span.x { background: var(--miss); opacity: 1; }
 #pause .reason { font-size: 28px; font-weight: 300; letter-spacing: .3em; text-transform: uppercase; }
-#help .card { background: var(--panel); border-radius: 24px; padding: 22px; text-align: left; max-width: 320px; width: 100%; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.5; font-weight: 400; color: var(--ink); }
+#help .card { background: var(--panel); border-radius: 6px; padding: 22px; text-align: left; max-width: 320px; width: 100%; display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.5; font-weight: 400; color: var(--ink); }
 #help .card b { font-weight: 600; }

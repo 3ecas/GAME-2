@@ -1,5 +1,5 @@
-/* Hop — hold to charge, release to hit. The shape flies, spins, bounces and rolls out;
-   stop it on the green, or roll it into the cup for a perfect.
+/* Hop — pull back, release, land on the next platform.
+   A square, some platforms, a slingshot. Gravity, spin, bounce and slide. Nothing else.
    Side-view 2D, one thumb, portrait, playable on mute, works offline. No dependencies, no build step. */
 (() => {
   'use strict';
@@ -7,12 +7,11 @@
   // ---------- data & constants ----------
   const DATA = window.HOP_DATA;
   const T = DATA.tuning;
-  const CHARS = DATA.characters;
   const THEMES = DATA.themes;
-  const KEY = 'hop.v2';
+  const SQUARE = DATA.square;
+  const KEY = 'hop.v3';
   const LAUNCH_UTC = Date.UTC(2026, 8, 29);
   const LOGICAL_W = 390;
-  const GROUND_FRAC = 0.68;
   const FONT = '-apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
   const TAU = Math.PI * 2;
   const RAD = Math.PI / 180;
@@ -50,29 +49,10 @@
   function rgb(hex) { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   function hexA(hex, a) { const c = rgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
   function mixHex(a, b, t) { const A = rgb(a), B = rgb(b); return 'rgb(' + Math.round(lerp(A[0], B[0], t)) + ',' + Math.round(lerp(A[1], B[1], t)) + ',' + Math.round(lerp(A[2], B[2], t)) + ')'; }
-  function circle(g, x, y, r) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
-  function rr(g, x, y, w, h, r) {
-    r = Math.min(r, w / 2, h / 2);
-    g.beginPath(); g.moveTo(x + r, y);
-    g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r);
-    g.closePath();
-  }
-  function shapePath(g, shape, cx, cy, r) {
-    g.beginPath();
-    switch (shape) {
-      case 'circle': g.arc(cx, cy, r, 0, TAU); break;
-      case 'triangle': { const R = r * 1.18; for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R + r * 0.16); } g.closePath(); break; }
-      case 'diamond': { const R = r * 1.2; g.moveTo(cx, cy - R); g.lineTo(cx + R, cy); g.lineTo(cx, cy + R); g.lineTo(cx - R, cy); g.closePath(); break; }
-      case 'hexagon': { const R = r * 1.1; for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * TAU / 6; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); break; }
-      case 'star': { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5; const R = i % 2 === 0 ? r * 1.25 : r * 0.58; g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); } g.closePath(); break; }
-      case 'plus': { const w = r * 0.4, R = r * 1.05; g.moveTo(cx - w, cy - R); g.lineTo(cx + w, cy - R); g.lineTo(cx + w, cy - w); g.lineTo(cx + R, cy - w); g.lineTo(cx + R, cy + w); g.lineTo(cx + w, cy + w); g.lineTo(cx + w, cy + R); g.lineTo(cx - w, cy + R); g.lineTo(cx - w, cy + w); g.lineTo(cx - R, cy + w); g.lineTo(cx - R, cy - w); g.lineTo(cx - w, cy - w); g.closePath(); break; }
-      default: { const rad = 5; g.moveTo(cx - r + rad, cy - r); g.arcTo(cx + r, cy - r, cx + r, cy + r, rad); g.arcTo(cx + r, cy + r, cx - r, cy + r, rad); g.arcTo(cx - r, cy + r, cx - r, cy - r, rad); g.arcTo(cx - r, cy - r, cx + r, cy - r, rad); g.closePath(); }
-    }
-  }
 
   // ---------- persistence ----------
   const Save = {
-    d: { best: 0, bestHoles: 0, bestCombo: 0, totalHoles: 0, daily: {}, sound: true, char: CHARS[0].id, runs: 0 },
+    d: { best: 0, totalPlatforms: 0, daily: {}, sound: true, runs: 0 },
     load() {
       try { const raw = localStorage.getItem(KEY); if (raw) { const o = JSON.parse(raw); if (o && typeof o === 'object') Object.assign(this.d, o); } }
       catch (e) { /* storage blocked: play without saving */ }
@@ -83,7 +63,7 @@
 
   // ---------- sound (optional; fully playable on mute) ----------
   const Sfx = {
-    ctx: null, chargeOsc: null, chargeGain: null,
+    ctx: null, aimOsc: null, aimGain: null,
     init() {
       if (this.ctx) return;
       try {
@@ -93,17 +73,17 @@
         const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 180;
         const g = this.ctx.createGain(); g.gain.value = 0;
         o.connect(g); g.connect(this.ctx.destination); o.start();
-        this.chargeOsc = o; this.chargeGain = g;
+        this.aimOsc = o; this.aimGain = g;
       } catch (e) { this.ctx = null; }
     },
     resume() { try { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); } catch (e) { /* ignore */ } },
     get on() { return Save.d.sound && !!this.ctx; },
-    charge(p) {
-      if (!this.ctx || !this.chargeGain) return;
+    aim(p) {
+      if (!this.ctx || !this.aimGain) return;
       const t = this.ctx.currentTime;
-      if (p < 0 || !this.on) { this.chargeGain.gain.setTargetAtTime(0, t, 0.03); return; }
-      this.chargeGain.gain.setTargetAtTime(0.05, t, 0.03);
-      this.chargeOsc.frequency.setTargetAtTime(170 + 430 * p, t, 0.03);
+      if (p < 0 || !this.on) { this.aimGain.gain.setTargetAtTime(0, t, 0.03); return; }
+      this.aimGain.gain.setTargetAtTime(0.04, t, 0.03);
+      this.aimOsc.frequency.setTargetAtTime(160 + 380 * p, t, 0.03);
     },
     tone(f, dur, type, vol, when, slide) {
       if (!this.on) return;
@@ -116,25 +96,16 @@
         o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.05);
       } catch (e) { /* ignore */ }
     },
-    noise(dur, vol) {
-      if (!this.on) return;
-      try {
-        const sr = this.ctx.sampleRate, n = Math.floor(sr * dur), buf = this.ctx.createBuffer(1, n, sr), d = buf.getChannelData(0);
-        for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-        const s = this.ctx.createBufferSource(); s.buffer = buf; const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
-        const g = this.ctx.createGain(); g.gain.value = vol; s.connect(f); f.connect(g); g.connect(this.ctx.destination); s.start();
-      } catch (e) { /* ignore */ }
-    },
-    hit(p) { this.tone(240 + 120 * p, 0.07, 'triangle', 0.2, 0, 120); },
-    bounce(v) { this.tone(180 + v * 0.1, 0.05, 'triangle', clamp(v / 900, 0.04, 0.14), 0, 140); },
-    sink(c) { const b = 660 * Math.pow(1.06, Math.min(c, 12)); this.tone(b, 0.1, 'sine', 0.2); this.tone(b * 1.5, 0.28, 'sine', 0.2, 0.09); },
-    splash() { this.noise(0.45, 0.35); this.tone(220, 0.4, 'sine', 0.15, 0, 60); },
+    launch(p) { this.tone(240 + 160 * p, 0.09, 'triangle', 0.2, 0, 90); },
+    bounce(v) { this.tone(170 + v * 0.08, 0.05, 'triangle', clamp(v / 900, 0.04, 0.14), 0, 130); },
+    score(n) { this.tone(520, 0.08, 'sine', 0.16); this.tone(n > 1 ? 1040 : 780, 0.18, 'sine', 0.16, 0.08); },
+    fall() { this.tone(200, 0.45, 'sawtooth', 0.14, 0, 50); },
   };
   function haptic(kind) {
     try {
       const cap = window.Capacitor, Hp = cap && cap.Plugins && cap.Plugins.Haptics;
-      if (Hp) { if (kind === 'perfect') Hp.notification({ type: 'SUCCESS' }); else if (kind === 'fail') Hp.notification({ type: 'ERROR' }); else Hp.impact({ style: 'LIGHT' }); }
-      else if (navigator.vibrate) navigator.vibrate(kind === 'fail' ? [60, 40, 60] : kind === 'perfect' ? [20, 30, 20] : 12);
+      if (Hp) { if (kind === 'score') Hp.notification({ type: 'SUCCESS' }); else if (kind === 'fail') Hp.notification({ type: 'ERROR' }); else Hp.impact({ style: 'LIGHT' }); }
+      else if (navigator.vibrate) navigator.vibrate(kind === 'fail' ? [60, 40, 60] : kind === 'score' ? [20, 30, 20] : 12);
     } catch (e) { /* ignore */ }
   }
 
@@ -143,9 +114,8 @@
   const ctx = canvas.getContext('2d');
   const el = {
     game: $('game'), hud: $('hud'), mode: $('hud-mode'), score: $('hud-score'), combo: $('hud-combo'), best: $('hud-best'), hint: $('hud-hint'),
-    menu: $('menu'), over: $('over'), pause: $('pause'), help: $('help'),
-    preview: $('m-preview'), mKind: $('m-kind'), mName: $('m-name'), mDots: $('m-dots'), mStats: $('m-stats'),
-    play: $('play'), daily: $('daily'), prev: $('prev'), nextBtn: $('next'), helpBtn: $('help-btn'), soundBtn: $('sound-btn'), helpClose: $('help-close'),
+    menu: $('menu'), over: $('over'), pause: $('pause'), help: $('help'), mStats: $('m-stats'),
+    play: $('play'), daily: $('daily'), helpBtn: $('help-btn'), soundBtn: $('sound-btn'), helpClose: $('help-close'),
     oEyebrow: $('o-eyebrow'), oTitle: $('o-title'), oStats: $('o-stats'), oBest: $('o-best'), oStrip: $('o-strip'), oUnlock: $('o-unlock'),
     oAgain: $('o-again'), oShare: $('o-share'), oMenu: $('o-menu'),
   };
@@ -153,8 +123,7 @@
   // ---------- state ----------
   let state = 'menu'; // menu | playing | paused | over
   let run = null;
-  let charIndex = Math.max(0, CHARS.findIndex((c) => c.id === Save.d.char));
-  let cssW = 390, cssH = 800, dpr = 1, scale = 1, H = 800, yGround = 544;
+  let cssW = 390, cssH = 800, dpr = 1, scale = 1, H = 800;
   let lastT = 0;
 
   function resize() {
@@ -163,212 +132,185 @@
     dpr = Math.min(window.devicePixelRatio || 1, 3);
     scale = cssW / LOGICAL_W;
     H = cssH / scale;
-    yGround = H * GROUND_FRAC;
     canvas.width = Math.round(cssW * dpr);
     canvas.height = Math.round(cssH * dpr);
   }
 
   // ---------- course ----------
   const themeFor = (i) => Math.floor(i / T.THEME_LEN) % THEMES.length;
-  // Rotational symmetry of each shape, so a resting shape settles onto a flat side.
-  const SYMMETRY = { square: Math.PI / 2, circle: 0.0001, triangle: TAU / 3, diamond: Math.PI / 2, hexagon: Math.PI / 3, star: TAU / 5, plus: Math.PI / 2 };
   const theme = () => THEMES[run.theme];
-  const accent = () => CHARS[charIndex].color;
 
   function newRun(mode, demo) {
-    const seed = mode === 'daily' ? hashStr('hop2:' + todayKey()) : (Math.random() * 4294967296) >>> 0;
+    const seed = mode === 'daily' ? hashStr('hop3:' + todayKey()) : (Math.random() * 4294967296) >>> 0;
     const r = {
       mode, demo: !!demo, seed, rng: mulberry32(seed), t: 0,
-      score: 0, holes: 0, combo: 0, maxCombo: 0, results: [], course: [], cur: 0, strokes: 0, startBest: Save.d.best,
-      ball: { x: 0, h: 0, vx: 0, vy: 0, ang: 0, av: 0, state: 'rest', charge: 0, sx: 1, sy: 1, restT: 0, holdT: 0, sunkHole: -1 },
-      acc: 0, cam: { x: -T.BALL_SCREEN_X }, popups: [], parts: [], shake: 0, dead: false, deadReason: '', deadT: 0,
-      theme: 0, themeFrom: 0, themeMix: 1, hinted: false, demoTarget: 0, dailyResult: null,
+      score: 0, results: [], plats: [], cur: 0, startBest: Save.d.best,
+      ball: { x: 0, y: 0, vx: 0, vy: 0, ang: 0, av: 0, state: 'rest', plat: 0, hit: false, sx: 1, sy: 1, restT: 0 },
+      aim: null, acc: 0, cam: { x: -T.BALL_SCREEN_X, y: -600 * T.BALL_SCREEN_Y }, popups: [], parts: [], shake: 0,
+      dead: false, deadReason: '', deadT: 0, theme: 0, themeFrom: 0, themeMix: 1, hinted: false, demoT: 0, demoV: null, dailyResult: null,
     };
-    while (r.course.length < 6) spawnHole(r);
+    while (r.plats.length < 7) spawnPlat(r);
+    r.cam.y = -H * T.BALL_SCREEN_Y;
     return r;
   }
 
-  // Each hole: a water channel right after the previous green, a stretch of fairway (maybe cut by a hazard), then the green with its cup.
-  function spawnHole(r) {
-    const i = r.course.length, prev = r.course[i - 1];
+  // Platforms are placed so the next one is always reachable from anywhere on the previous one at full pull.
+  function spawnPlat(r) {
+    const i = r.plats.length, prev = r.plats[i - 1];
+    if (!prev) { r.plats.push({ i, x: -60, w: 120, top: 0, theme: 0 }); return; }
     const diff = clamp(i / T.RAMP, 0, 1), rng = r.rng;
-    const prevEnd = prev ? prev.greenEnd : 40;
-    const chW = lerp(T.CHANNEL_W[0], T.CHANNEL_W[1], diff) + (rng() - 0.5) * 8;
-    const channelStart = prevEnd, channelEnd = prevEnd + chW;
-    const fairLen = lerp(T.FAIRWAY_LEN[0], T.FAIRWAY_LEN[1], rng());
-    const gw = lerp(lerp(T.GREEN_W[0][0], T.GREEN_W[1][0], diff), lerp(T.GREEN_W[0][1], T.GREEN_W[1][1], diff), rng());
-    const greenStart = channelEnd + fairLen, greenEnd = greenStart + gw;
-    const cup = greenStart + gw * lerp(T.CUP_FRAC[0], T.CUP_FRAC[1], rng());
-    const hz = rng(), hw = rng(), hp = rng();
-    let hazard = null;
-    if (i >= T.HAZARD_FROM && hz < lerp(0, T.HAZARD_CHANCE_END, diff)) {
-      const w = Math.min(lerp(T.HAZARD_W[0], T.HAZARD_W[1], hw), fairLen - 24);
-      if (w >= 18) { const start = channelEnd + 12 + hp * (fairLen - 24 - w); hazard = { start, end: start + w }; }
-    }
-    r.course.push({ i, channelStart, channelEnd, greenStart, greenEnd, cup, hazard, theme: themeFor(i) });
+    const w = lerp(lerp(T.W_START[0], T.W_END[0], diff), lerp(T.W_START[1], T.W_END[1], diff), rng());
+    let dy = lerp(lerp(T.DY_START[0], T.DY_END[0], diff), lerp(T.DY_START[1], T.DY_END[1], diff), rng());
+    if (prev.top + dy < -T.TOP_RANGE || prev.top + dy > T.TOP_RANGE) dy = -dy;
+    const reach = (h) => { const v = T.V_MAX, g = T.G; return (v / g) * Math.sqrt(Math.max(0, v * v - 2 * g * h)); };
+    let gapMax = 0.72 * reach(-dy) - prev.w - w / 2;
+    if (gapMax < 50) { dy = 60; gapMax = 0.72 * reach(-dy) - prev.w - w / 2; }
+    const gapWant = lerp(lerp(T.GAP_START[0], T.GAP_END[0], diff), lerp(T.GAP_START[1], T.GAP_END[1], diff), rng());
+    const gap = clamp(gapWant, 40, Math.max(40, gapMax));
+    r.plats.push({ i, x: prev.x + prev.w + gap, w, top: prev.top + dy, theme: themeFor(i) });
   }
-  function ensureHoles() { while (run.course.length < run.cur + 5) spawnHole(run); }
+  function ensurePlats() { while (run.plats.length < run.cur + 7) spawnPlat(run); }
+  function nearPlats() { return run.plats.slice(Math.max(0, run.cur - 1), run.cur + 5); }
+  function fallLine() { let m = -Infinity; for (const p of nearPlats()) m = Math.max(m, p.top); return m + T.FALL_MARGIN; }
 
-  function groundAt(x) {
-    const c = run.course;
-    for (let j = Math.max(0, run.cur - 1); j < c.length; j++) {
-      const h = c[j];
-      if (x < h.channelStart) break;
-      if (x < h.channelEnd) return 'water';
-      if (h.hazard && x >= h.hazard.start && x < h.hazard.end) return 'water';
-      if (x >= h.greenStart && x <= h.greenEnd) return 'green';
-    }
-    return 'fairway';
-  }
-  function cupAt(x) {
-    for (let j = run.cur; j < Math.min(run.course.length, run.cur + 2); j++) if (Math.abs(x - run.course[j].cup) <= T.CUP_R) return j;
-    return -1;
-  }
-  // Only greens at or beyond the current hole count; resting on a green already played is just a lie on the course.
-  function greenIndexAt(x) {
-    for (let j = run.cur; j < Math.min(run.course.length, run.cur + 3); j++) { const h = run.course[j]; if (x >= h.greenStart && x <= h.greenEnd) return j; }
-    return -1;
-  }
-
-  // ---------- physics (fixed step) ----------
-  function launch(b, p) {
-    const v = lerp(T.V_MIN, T.V_MAX, clamp(p, 0, 1)), a = T.ANGLE * RAD;
-    b.vx = v * Math.cos(a); b.vy = v * Math.sin(a); b.h = 0; b.state = 'air';
-    b.av = (b.vx / T.BALL_R) * 0.9;
-  }
-  // Returns an event name or null. `h` is the height of the ball's bottom above the ground, vy is positive upward.
+  // ---------- physics (fixed step; y grows downward) ----------
   function stepBall(b, dt) {
-    const r = T.BALL_R;
+    const S = T.SIZE, half = S / 2;
     if (b.state === 'air') {
-      b.vy -= T.G * dt;
-      b.x += b.vx * dt; b.h += b.vy * dt; b.ang += b.av * dt;
-      if (b.h <= 0 && b.vy < 0 && groundAt(b.x) !== 'water') {
-        b.h = 0;
-        const cj = cupAt(b.x);
-        if (cj >= 0 && Math.abs(b.vx) < T.CUP_V_AIR) { b.x = run.course[cj].cup; b.vx = 0; b.vy = 0; b.sunkHole = cj; b.state = 'sunk'; return 'sunk'; }
-        if (-b.vy > T.BOUNCE_MIN_VY) { b.vy = -b.vy * T.BOUNCE; b.vx *= T.BOUNCE_FRICTION; b.av = b.vx / r; return 'bounce'; }
-        b.vy = 0; b.state = 'roll'; b.av = b.vx / r; return 'land';
+      const px = b.x, py = b.y;
+      b.vy += T.G * dt;
+      b.x += b.vx * dt; b.y += b.vy * dt; b.ang += b.av * dt;
+      const plats = nearPlats();
+      if (b.vy > 0) {
+        for (const p of plats) {
+          if (py <= p.top && b.y >= p.top) {
+            const k = (p.top - py) / (b.y - py || 1);
+            const lx = px + (b.x - px) * k;
+            if (lx >= p.x && lx <= p.x + p.w) {
+              b.x = lx; b.y = p.top; b.plat = p.i;
+              if (b.vy > T.BOUNCE_MIN_VY) { b.vy = -b.vy * T.BOUNCE; b.vx *= T.BOUNCE_FRICTION; b.av = b.vx / half; return 'bounce'; }
+              b.vy = 0; b.state = 'slide'; b.av = b.vx / half; return 'land';
+            }
+          }
+        }
       }
-      if (b.h < -30) { b.state = 'water'; return 'water'; }
-    } else if (b.state === 'roll') {
-      const dec = T.ROLL_DECEL * dt;
+      for (const p of plats) {
+        const overlapY = b.y > p.top + 2 && b.y - S < p.top + T.PLAT_TH;
+        if (!overlapY) continue;
+        if (px + half <= p.x && b.x + half > p.x) { b.x = p.x - half; b.vx = -Math.abs(b.vx) * 0.25; b.hit = true; return 'side'; }
+        if (px - half >= p.x + p.w && b.x - half < p.x + p.w) { b.x = p.x + p.w + half; b.vx = Math.abs(b.vx) * 0.25; b.hit = true; return 'side'; }
+      }
+      if (b.y > fallLine()) { b.state = 'fall'; return 'fall'; }
+    } else if (b.state === 'slide') {
+      const dec = T.SLIDE_DECEL * dt;
       if (Math.abs(b.vx) <= dec) b.vx = 0; else b.vx -= Math.sign(b.vx) * dec;
-      b.x += b.vx * dt; b.ang += (b.vx / r) * dt;
-      if (groundAt(b.x) === 'water') { b.state = 'air'; b.vy = 0; return null; }
-      const cj = cupAt(b.x);
-      if (cj >= 0 && Math.abs(b.vx) < T.CUP_V) { b.x = run.course[cj].cup; b.vx = 0; b.sunkHole = cj; b.state = 'sunk'; return 'sunk'; }
+      b.x += b.vx * dt; b.ang += (b.vx / half) * dt;
+      const p = run.plats[b.plat];
+      if (b.x < p.x || b.x > p.x + p.w) { b.state = 'air'; b.vy = 0; return 'edge'; }
       if (b.vx === 0) { b.state = 'rest'; return 'rest'; }
     }
     return null;
   }
-  // Pure: plays a shot of power p from the current resting position and reports where it ends up.
-  function simulateShot(p) {
-    const b = { x: run.ball.x, h: 0, vx: 0, vy: 0, ang: 0, av: 0, state: 'air', sunkHole: -1 };
-    launch(b, p);
-    let t = 0, ev = null;
-    while (t < 8) { ev = stepBall(b, T.STEP); t += T.STEP; if (ev === 'rest' || ev === 'sunk' || ev === 'water') break; }
-    return { state: b.state, x: b.x, t };
-  }
-  // The power whose shot sinks at targetX if one exists, else the one that stops closest to it on land.
-  function solveShot(targetX) {
-    let best = { p: 0.5, err: Infinity };
-    for (let i = 0; i <= 100; i++) {
-      const p = i / 100, res = simulateShot(p);
-      if (res.state === 'sunk' && Math.abs(res.x - targetX) <= T.CUP_R + 1) return p;
-      const err = res.state === 'water' ? 1e9 : Math.abs(res.x - targetX);
-      if (err < best.err) best = { p, err };
-    }
-    return best.p;
-  }
-
-  // ---------- particles & popups ----------
-  function popup(text, x, y, o) {
-    o = o || {};
-    run.popups.push({ text, x, y, t: 0, life: o.life || 1.0, color: o.color || null, size: o.size || 20, spaced: o.spaced !== false });
-  }
-  function part(o) { run.parts.push(Object.assign({ kind: 'dot', x: 0, y: 0, vx: 0, vy: 0, t: 0, life: 0.5, r: 2, color: '#000', g: 0, size: 46 }, o)); }
-  function dots(x, y, n, color, speed, spread, g) {
-    for (let i = 0; i < n; i++) part({ x: x + (Math.random() - 0.5) * spread, y, vx: (Math.random() - 0.5) * speed * 2, vy: -Math.random() * speed - 20, life: 0.4 + Math.random() * 0.3, r: 1.8 + Math.random() * 2.2, color, g: g == null ? 500 : g });
-  }
-  function ringFx(x, y, color, delay, size) { part({ kind: 'ring', x, y, life: 0.6, color, t: -(delay || 0), size: size || 46 }); }
-
-  // ---------- input & shots ----------
-  function press() {
-    if (state !== 'playing' || !run || run.dead || run.demo) return;
+  function launchWith(vx, vy) {
     const b = run.ball;
-    if (b.state !== 'rest') return;
-    b.state = 'charge'; b.charge = 0; run.hinted = true;
-    el.hint.classList.add('on');
-    Sfx.charge(0);
-  }
-  function release() {
-    el.hint.classList.remove('on');
-    if (run && run.hinted) el.hint.classList.add('hidden');
-    if (!run || run.dead || run.ball.state !== 'charge' || run.demo) return;
-    fire(run.ball.charge / T.T_MAX);
-  }
-  function fire(p) {
-    const b = run.ball;
-    launch(b, p);
-    run.strokes++;
+    b.vx = vx; b.vy = vy; b.state = 'air'; b.hit = false;
+    const sp = Math.hypot(vx, vy);
+    b.av = (sp / (T.SIZE / 2)) * 0.7 * (vx >= 0 ? 1 : -1);
     run.acc = 0;
     b.sx = 0.85; b.sy = 1.15;
-    dots(b.x, yGround, 5, hexA(theme().ink, 0.35), 90, 14);
-    Sfx.charge(-1); Sfx.hit(p); haptic('tap');
-    syncHud();
+    const p = run.plats[b.plat];
+    squares(b.x, p ? p.top : b.y, 5, hexA(theme().ink, 0.35), 90, 14);
+    Sfx.aim(-1); Sfx.launch(sp / T.V_MAX); haptic('tap');
+  }
+  // Pure: plays a launch from the current resting position and reports where it ends up.
+  function simulateLaunch(vx, vy) {
+    const src = run.ball;
+    const b = { x: src.x, y: src.y, vx, vy, ang: 0, av: 0, state: 'air', plat: src.plat, hit: false };
+    let t = 0, ev = null, side = false;
+    while (t < 8) {
+      ev = stepBall(b, T.STEP); t += T.STEP;
+      if (ev === 'side') side = true;
+      if (ev === 'rest' || ev === 'fall') break;
+    }
+    return { state: b.state, x: b.x, plat: b.plat, side, t };
+  }
+  // A launch that comes to rest on platform j, as near its middle as the scan finds. Null if none.
+  function solveLaunch(j) {
+    const p = run.plats[j]; if (!p) return null;
+    const cx = p.x + p.w / 2;
+    let best = null;
+    for (const deg of [45, 55, 65, 75]) {
+      const a = deg * RAD;
+      for (let i = 4; i <= 100; i += 1) {
+        const v = (i / 100) * T.V_MAX, vx = v * Math.cos(a), vy = -v * Math.sin(a);
+        const res = simulateLaunch(vx, vy);
+        if (res.state !== 'rest' || res.plat !== j) continue;
+        const err = Math.abs(res.x - cx);
+        if (!best || err < best.err) best = { vx, vy, err };
+        if (err < 3) return best;
+      }
+    }
+    return best;
+  }
+
+  // ---------- particles & popups (small squares only) ----------
+  function popup(text, x, y, o) {
+    o = o || {};
+    run.popups.push({ text, x, y, t: 0, life: o.life || 1.0, color: o.color || null, size: o.size || 22, spaced: !!o.spaced });
+  }
+  function squares(x, y, n, color, speed, spread) {
+    for (let i = 0; i < n; i++) run.parts.push({ x: x + (Math.random() - 0.5) * spread, y, vx: (Math.random() - 0.5) * speed * 2, vy: -Math.random() * speed - 20, t: 0, life: 0.4 + Math.random() * 0.3, r: 1.6 + Math.random() * 2, rot: Math.random() * TAU, spin: (Math.random() - 0.5) * 10, color });
+  }
+
+  // ---------- aiming (slingshot) ----------
+  function aimVector(d) {
+    const len = Math.hypot(d.x, d.y);
+    if (len < T.DEADZONE) return null;
+    const pow = Math.min(len, T.DRAG_MAX) / T.DRAG_MAX;
+    return { vx: -d.x / len * pow * T.V_MAX, vy: -d.y / len * pow * T.V_MAX, pow };
+  }
+  function aimStart(pt) {
+    if (state !== 'playing' || !run || run.dead || run.demo) return;
+    if (run.ball.state !== 'rest') return;
+    run.aim = { sx: pt.x, sy: pt.y, x: pt.x, y: pt.y };
+    run.hinted = true; el.hint.classList.add('on');
+    Sfx.aim(0);
+  }
+  function aimMove(pt) { if (run && run.aim) { run.aim.x = pt.x; run.aim.y = pt.y; const v = aimVector({ x: pt.x - run.aim.sx, y: pt.y - run.aim.sy }); Sfx.aim(v ? v.pow : 0); } }
+  function aimEnd() {
+    el.hint.classList.remove('on');
+    if (!run || !run.aim) return;
+    const v = aimVector({ x: run.aim.x - run.aim.sx, y: run.aim.y - run.aim.sy });
+    run.aim = null;
+    Sfx.aim(-1);
+    if (run.dead || run.ball.state !== 'rest') return;
+    if (v) { el.hint.classList.add('hidden'); launchWith(v.vx, v.vy); }
   }
 
   function onEvent(ev) {
     const b = run.ball;
-    if (ev === 'bounce') { b.sy = 0.7; b.sx = 1.25; dots(b.x, yGround, 4, hexA(theme().ink, 0.3), 70, 10); Sfx.bounce(Math.abs(b.vy) / T.BOUNCE); }
-    else if (ev === 'land') { b.sy = 0.85; b.sx = 1.1; Sfx.bounce(120); }
-    else if (ev === 'sunk') { b.holdT = 0; completeHole(b.sunkHole, true); }
-    else if (ev === 'water') { die('Splash'); }
+    if (ev === 'bounce') { b.sy = 0.7; b.sx = 1.25; squares(b.x, b.y, 4, hexA(theme().ink, 0.3), 70, 10); Sfx.bounce(Math.abs(b.vy) / T.BOUNCE); }
+    else if (ev === 'land') { b.sy = 0.82; b.sx = 1.12; Sfx.bounce(140); }
+    else if (ev === 'side') { Sfx.bounce(300); }
+    else if (ev === 'fall') die(b.hit ? 'Hit the side of a platform' : b.x < run.plats[run.cur + 1].x ? 'Fell short' : 'Overshot');
     else if (ev === 'rest') resolveRest();
   }
-
   function resolveRest() {
     const b = run.ball;
-    const gi = greenIndexAt(b.x);
-    if (gi >= 0) { completeHole(gi, false); return; }
-    let ni = run.cur;
-    while (ni < run.course.length - 1 && b.x > run.course[ni].greenEnd) ni++;
-    if (ni !== run.cur) { run.cur = ni; run.strokes = 1; ensureHoles(); checkTheme(); }
-    if (run.strokes >= T.MAX_STROKES) { die('Three strokes, still off the green'); return; }
+    const j = b.plat;
     b.restT = 0;
-    syncHud();
-  }
-
-  function completeHole(hi, sunk) {
-    const b = run.ball, hole = run.course[hi];
-    const first = hi === run.cur && run.strokes === 1;
-    let gained;
-    if (sunk && first) {
-      run.combo++; run.maxCombo = Math.max(run.maxCombo, run.combo);
-      gained = 2 * run.combo; run.results.push('P');
-      popup('PERFECT', hole.cup, yGround - 70, { color: accent(), size: 20 });
-      if (run.combo >= 2) popup('×' + run.combo, hole.cup, yGround - 98, { color: accent(), size: 26, life: 1.2, spaced: false });
-      ringFx(hole.cup, yGround, accent(), 0, 60); ringFx(hole.cup, yGround, accent(), 0.12, 44); dots(hole.cup, yGround, 10, hexA(accent(), 0.9), 170, 24);
-      Sfx.sink(run.combo); haptic('perfect');
-    } else if (sunk) {
-      run.combo = 0; gained = 2; run.results.push('N');
-      popup('IN  +2', hole.cup, yGround - 66, { size: 20 });
-      ringFx(hole.cup, yGround, hexA(theme().ink, 0.4), 0, 44);
-      Sfx.sink(0); haptic('tap');
-    } else {
-      run.combo = 0; gained = 1; run.results.push('N');
-      popup('+1', b.x, yGround - 62, { size: 24, spaced: false });
-      haptic('tap');
+    if (j > run.cur) {
+      const gained = j - run.cur;
+      run.score += gained;
+      for (let k = 0; k < gained; k++) run.results.push('N');
+      popup(gained > 1 ? '+' + gained + '  long jump' : '+1', b.x, b.y - 54, { size: gained > 1 ? 18 : 24, spaced: gained > 1 });
+      if (!run.demo) { Save.d.totalPlatforms += gained; if (run.score > Save.d.best) Save.d.best = run.score; }
+      run.cur = j; ensurePlats();
+      const th = run.plats[run.cur].theme;
+      if (th !== run.theme) { run.themeFrom = run.theme; run.theme = th; run.themeMix = 0; }
+      Sfx.score(gained); haptic('score');
     }
-    run.score += gained; run.holes++;
-    if (!run.demo) { Save.d.totalHoles++; if (run.score > Save.d.best) Save.d.best = run.score; }
-    run.cur = hi + 1; run.strokes = 0; ensureHoles(); checkTheme();
-    if (!sunk) { b.state = 'rest'; b.restT = 0; }
     syncHud();
-  }
-  function checkTheme() {
-    const th = run.course[run.cur].theme;
-    if (th !== run.theme) { run.themeFrom = run.theme; run.theme = th; run.themeMix = 0; }
   }
 
   function update(dt) {
@@ -377,45 +319,43 @@
     if (!run.dead) {
       if (b.state === 'rest') {
         b.restT += dt;
-        b.sx += (1 - b.sx) * (1 - Math.exp(-dt * 12)); b.sy += (1 - b.sy) * (1 - Math.exp(-dt * 12));
-        const sym = SYMMETRY[CHARS[charIndex].shape] || TAU;
-        const flat = Math.round(b.ang / sym) * sym;
+        const pull = run.aim ? aimVector({ x: run.aim.x - run.aim.sx, y: run.aim.y - run.aim.sy }) : null;
+        const pow = pull ? pull.pow : 0;
+        b.sx += (1 + 0.12 * pow - b.sx) * (1 - Math.exp(-dt * 14)); b.sy += (1 - 0.18 * pow - b.sy) * (1 - Math.exp(-dt * 14));
+        const flat = Math.round(b.ang / (Math.PI / 2)) * (Math.PI / 2);
         b.ang += (flat - b.ang) * (1 - Math.exp(-dt * 14));
-        if (run.demo && b.restT > 0.7) {
-          const p = solveShot(run.course[run.cur].cup);
-          run.demoTarget = clamp(p + (Math.random() - 0.5) * 0.03, 0, 1) * T.T_MAX;
-          b.state = 'charge'; b.charge = 0;
+        if (run.demo) {
+          if (!run.demoV && b.restT > 0.6) { const v = solveLaunch(run.cur + 1); if (v) { run.demoV = { vx: v.vx * (1 + (Math.random() - 0.5) * 0.05), vy: v.vy * (1 + (Math.random() - 0.5) * 0.05) }; run.demoT = 0; } }
+          if (run.demoV) {
+            run.demoT += dt;
+            const k = clamp(run.demoT / 0.45, 0, 1), sp = Math.hypot(run.demoV.vx, run.demoV.vy), L = (sp / T.V_MAX) * T.DRAG_MAX * k;
+            run.aim = { sx: 200, sy: 500, x: 200 - run.demoV.vx / sp * L, y: 500 - run.demoV.vy / sp * L };
+            if (run.demoT > 0.75) { run.aim = null; launchWith(run.demoV.vx, run.demoV.vy); run.demoV = null; }
+          }
         }
-      } else if (b.state === 'charge') {
-        b.charge = Math.min(T.T_MAX, b.charge + dt);
-        const p = b.charge / T.T_MAX;
-        b.sx += (1 + 0.15 * p - b.sx) * (1 - Math.exp(-dt * 14)); b.sy += (1 - 0.2 * p - b.sy) * (1 - Math.exp(-dt * 14));
-        Sfx.charge(p);
-        if (run.demo && b.charge >= run.demoTarget) fire(b.charge / T.T_MAX);
-      } else if (b.state === 'air' || b.state === 'roll') {
+      } else if (b.state === 'air' || b.state === 'slide') {
         run.acc += dt;
         while (run.acc >= T.STEP) {
           run.acc -= T.STEP;
           const ev = stepBall(b, T.STEP);
-          if (ev) { onEvent(ev); if (ev === 'rest' || ev === 'sunk' || ev === 'water') break; }
+          if (ev) { onEvent(ev); if (ev === 'rest' || ev === 'fall') break; }
         }
         b.sx += (1 - b.sx) * (1 - Math.exp(-dt * 10)); b.sy += (1 - b.sy) * (1 - Math.exp(-dt * 10));
-      } else if (b.state === 'sunk') {
-        b.holdT += dt;
-        b.h = -26 * clamp(b.holdT / 0.18, 0, 1);
-        if (b.holdT > 0.6) { b.x = run.course[b.sunkHole].cup + 14; b.h = 0; b.ang = 0; b.state = 'rest'; b.restT = 0; }
       }
     } else {
       run.deadT += dt;
-      if (b.state === 'water') { b.vy -= T.G * dt; b.h += b.vy * dt; b.x += b.vx * dt * 0.3; b.ang += b.av * dt; }
+      if (b.state === 'fall') { b.vy += T.G * dt; b.y += b.vy * dt; b.x += b.vx * dt * 0.3; b.ang += b.av * dt; }
       if (run.demo && run.deadT > 1.4) { run = newRun('play', true); return; }
-      if (!run.demo && run.deadT > 0.75 && state === 'playing') finishRun();
+      if (!run.demo && run.deadT > 0.8 && state === 'playing') finishRun();
     }
 
-    const camT = b.x - T.BALL_SCREEN_X;
-    run.cam.x += (camT - run.cam.x) * (1 - Math.exp(-dt * 6));
+    const camX = b.x - T.BALL_SCREEN_X;
+    const anchorY = b.state === 'rest' || b.state === 'slide' ? b.y : Math.min(b.y, run.plats[run.cur].top);
+    const camY = anchorY - H * T.BALL_SCREEN_Y;
+    run.cam.x += (camX - run.cam.x) * (1 - Math.exp(-dt * 6));
+    run.cam.y += (camY - run.cam.y) * (1 - Math.exp(-dt * 4));
     if (run.themeMix < 1) run.themeMix = Math.min(1, run.themeMix + dt / 1.2);
-    for (const p of run.parts) { p.t += dt; if (p.kind !== 'ring') { p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; } }
+    for (const p of run.parts) { p.t += dt; p.vy += 500 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.spin * dt; }
     run.parts = run.parts.filter((p) => p.t < p.life);
     for (const p of run.popups) p.t += dt;
     run.popups = run.popups.filter((p) => p.t < p.life);
@@ -427,112 +367,87 @@
     run.dead = true; run.deadReason = reason; run.deadT = 0;
     run.results.push('X');
     run.shake = 10;
-    const b = run.ball;
-    if (b.state === 'water') {
-      const w = hexA(mixHex(theme().water, theme().ink, 0.35), 0.9);
-      dots(b.x, yGround + 8, 10, w, 180, 20, 700);
-      ringFx(b.x, yGround + 8, w, 0, 50); ringFx(b.x, yGround + 8, w, 0.12, 36);
-    }
-    Sfx.charge(-1);
-    if (!run.demo) { Sfx.splash(); haptic('fail'); el.hint.classList.add('hidden'); }
+    run.aim = null;
+    Sfx.aim(-1);
+    if (!run.demo) { Sfx.fall(); haptic('fail'); el.hint.classList.add('hidden'); }
   }
 
   function finishRun() {
     state = 'over';
     const before = run.startBest, after = Save.d.best;
     let bestLine = run.score >= after && run.score > before ? 'NEW BEST' : 'BEST ' + fmt(after);
-    if (run.holes > Save.d.bestHoles) Save.d.bestHoles = run.holes;
-    if (run.maxCombo > Save.d.bestCombo) Save.d.bestCombo = run.maxCombo;
     if (run.mode === 'daily') {
-      run.dailyResult = { day: dayNumber(), score: run.score, holes: run.holes, combo: run.maxCombo, results: run.results.slice(0, 60) };
+      run.dailyResult = { day: dayNumber(), score: run.score, results: run.results.slice(0, 60) };
       Save.d.daily[todayKey()] = run.dailyResult;
       bestLine = 'DAILY #' + run.dailyResult.day + (run.score > before ? ' · NEW BEST' : '');
     }
     Save.d.runs = (Save.d.runs || 0) + 1;
     Save.save();
-    const newly = CHARS.filter((c) => c.unlock > before && c.unlock <= after);
-    let unlockLine;
-    if (newly.length) unlockLine = 'New shape unlocked: ' + newly.map((c) => c.name).join(', ');
-    else { const n = CHARS.find((c) => c.unlock > after); unlockLine = n ? 'Next shape at best ' + n.unlock + ' · you have ' + after : 'All shapes unlocked'; }
     showOver({
-      eyebrow: run.deadReason === 'Splash' ? 'Water' : 'Missed', title: run.deadReason,
-      stats: fmt(run.score) + ' pts · ' + run.holes + ' holes · best streak ×' + run.maxCombo,
-      best: bestLine, strip: run.results, unlock: unlockLine, daily: run.dailyResult,
+      eyebrow: run.deadReason === 'Overshot' || run.deadReason === 'Fell short' ? 'Missed' : 'Bump', title: run.deadReason,
+      stats: run.score + (run.score === 1 ? ' platform' : ' platforms'),
+      best: bestLine, strip: run.results, unlock: '', daily: run.dailyResult,
     });
   }
 
-  // ---------- drawing: flat pastel geometry, nothing else ----------
+  // ---------- drawing: flat rectangles only ----------
   function col(key) { return run.themeMix >= 1 ? THEMES[run.theme][key] : mixHex(THEMES[run.themeFrom][key], THEMES[run.theme][key], run.themeMix); }
 
   function draw() {
     ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
-    const cam = run.cam.x;
+    const cx = run.cam.x, cy = run.cam.y;
     ctx.save();
     if (run.shake > 0.3) ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
-    ctx.fillStyle = col('sky'); ctx.fillRect(0, 0, LOGICAL_W, H);
-    ctx.fillStyle = col('sun'); circle(ctx, 296 - ((cam * 0.03) % 600), 118, 42);
-    ctx.fillStyle = col('ground'); ctx.fillRect(0, yGround, LOGICAL_W, H - yGround);
-    ctx.fillStyle = col('groundTop'); ctx.fillRect(0, yGround, LOGICAL_W, 6);
-
-    const sky = col('sky'), water = col('water'), green = col('green'), ink = col('ink');
-    for (let j = Math.max(0, run.cur - 2); j < run.course.length; j++) {
-      const h = run.course[j];
-      if (h.channelStart - cam > LOGICAL_W + 40) break;
-      if (h.greenEnd - cam < -40) continue;
-      ctx.fillStyle = green; ctx.fillRect(h.greenStart - cam, yGround, h.greenEnd - h.greenStart, H - yGround);
-      gap(h.channelStart - cam, h.channelEnd - h.channelStart, sky, water);
-      if (h.hazard) gap(h.hazard.start - cam, h.hazard.end - h.hazard.start, sky, water);
-      // cup and flag
-      ctx.fillStyle = hexA(THEMES[run.theme].ink, 0.85);
-      ctx.beginPath(); ctx.ellipse(h.cup - cam, yGround + 1, T.CUP_R, 3, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = hexA(THEMES[run.theme].ink, 0.55); ctx.fillRect(h.cup - cam - 1, yGround - 52, 2, 52);
-      ctx.fillStyle = accent(); ctx.beginPath(); ctx.moveTo(h.cup - cam + 1, yGround - 52); ctx.lineTo(h.cup - cam + 22, yGround - 45); ctx.lineTo(h.cup - cam + 1, yGround - 38); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = col('bg'); ctx.fillRect(0, 0, LOGICAL_W, H);
+    ctx.fillStyle = col('plat');
+    for (let j = Math.max(0, run.cur - 3); j < run.plats.length; j++) {
+      const p = run.plats[j];
+      if (p.x - cx > LOGICAL_W + 40) break;
+      if (p.x + p.w - cx < -40) continue;
+      ctx.fillRect(p.x - cx, p.top - cy, p.w, T.PLAT_TH);
     }
-
-    const b = run.ball, ch = CHARS[charIndex];
-    if (b.state !== 'gone') drawShape(ctx, ch, b.x - cam, yGround - b.h - T.BALL_R, b.sx, b.sy, b.ang);
-    if (b.state === 'sunk') { ctx.fillStyle = green; ctx.fillRect(b.x - cam - 20, yGround, 40, 34); ctx.fillStyle = hexA(THEMES[run.theme].ink, 0.85); ctx.beginPath(); ctx.ellipse(b.x - cam, yGround + 1, T.CUP_R, 3, 0, 0, TAU); ctx.fill(); }
-    if (b.state === 'water' && b.h < -T.BALL_R) { ctx.fillStyle = water; ctx.fillRect(b.x - cam - 30, yGround + 6, 60, H - yGround); }
-    if (b.state === 'charge') drawChargeRing(b.x - cam, yGround - T.BALL_R, b.charge / T.T_MAX, ch.color, ink);
-    drawParticles(cam); drawPopups(cam, ink);
+    const b = run.ball, ink = col('ink');
+    if (run.aim) drawAim(b, cx, cy, ink);
+    drawSquare(b.x - cx, b.y - cy - T.SIZE / 2, b.sx, b.sy, b.ang);
+    drawParticles(cx, cy);
+    drawPopups(cx, cy, ink);
     ctx.restore();
   }
-  function gap(x, w, sky, water) {
-    if (w <= 0) return;
-    ctx.fillStyle = sky; ctx.fillRect(x, yGround, w, 6);
-    ctx.fillStyle = water; ctx.fillRect(x, yGround + 6, w, H - yGround);
+  // The pull: a thin band in the direction of the finger, and a dashed line the way the square will go.
+  function drawAim(b, cx, cy, ink) {
+    const v = aimVector({ x: run.aim.x - run.aim.sx, y: run.aim.y - run.aim.sy });
+    const ox = b.x - cx, oy = b.y - cy - T.SIZE / 2;
+    ctx.lineCap = 'butt';
+    if (!v) return;
+    const dx = v.vx / T.V_MAX, dy = v.vy / T.V_MAX; // direction × power
+    ctx.strokeStyle = hexA(SQUARE, 0.7); ctx.lineWidth = 3; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox - dx * T.DRAG_MAX, oy - dy * T.DRAG_MAX); ctx.stroke();
+    ctx.strokeStyle = hexA(THEMES[run.theme].ink, 0.45); ctx.lineWidth = 3; ctx.setLineDash([7, 6]);
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox + dx * 110, oy + dy * 110); ctx.stroke();
+    ctx.setLineDash([]);
   }
-  // The player: one flat shape in its own pastel, rotating with its spin. Squash is applied in world axes before the rotation.
-  function drawShape(g, ch, x, y, sx, sy, ang) {
-    g.save(); g.translate(x, y); g.scale(sx, sy); g.rotate(ang);
-    g.fillStyle = ch.color; g.strokeStyle = ch.color; g.lineWidth = 2; g.lineJoin = 'round';
-    shapePath(g, ch.shape, 0, 0, T.BALL_R);
-    g.fill(); if (ch.shape !== 'circle') g.stroke();
-    g.fillStyle = 'rgba(59,58,74,.28)'; circle(g, T.BALL_R * 0.45, 0, 2.2);
-    g.restore();
+  // The square: one flat fill, rotating with its spin. Squash is applied in world axes before the rotation.
+  function drawSquare(x, y, sx, sy, ang) {
+    const S = T.SIZE, half = S / 2;
+    ctx.save(); ctx.translate(x, y); ctx.scale(sx, sy); ctx.rotate(ang);
+    ctx.fillStyle = SQUARE; ctx.fillRect(-half, -half, S, S);
+    ctx.fillStyle = 'rgba(59,58,74,.25)'; ctx.fillRect(half * 0.3, -2, 4, 4);
+    ctx.restore();
   }
-  function drawChargeRing(x, y, p, color, ink) {
-    const r = 26;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = hexA(THEMES[run.theme].ink, 0.12); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke();
-    if (p > 0.005) { ctx.strokeStyle = color; ctx.beginPath(); ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + TAU * p); ctx.stroke(); }
-  }
-  function drawParticles(cam) {
+  function drawParticles(cx, cy) {
     for (const p of run.parts) {
-      if (p.t < 0) continue;
-      const k = p.t / p.life, a = 1 - k;
-      ctx.globalAlpha = a;
-      if (p.kind === 'dot') { ctx.fillStyle = p.color; circle(ctx, p.x - cam, p.y, p.r * (0.5 + 0.5 * a)); }
-      else { ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(p.x - cam, p.y, 4 + k * p.size, 0, TAU); ctx.stroke(); }
+      const a = 1 - p.t / p.life;
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(p.x - cx, p.y - cy); ctx.rotate(p.rot);
+      ctx.fillStyle = p.color; ctx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
+      ctx.restore();
     }
-    ctx.globalAlpha = 1;
   }
-  function drawPopups(cam, ink) {
+  function drawPopups(cx, cy, ink) {
     for (const p of run.popups) {
       const a = 1 - p.t / p.life;
       const s = p.t < 0.12 ? 0.7 + (p.t / 0.12) * 0.3 : 1;
       ctx.save(); ctx.globalAlpha = a;
-      ctx.translate(clamp(p.x - cam, 72, LOGICAL_W - 72), p.y - p.t * 34); ctx.scale(s, s);
+      ctx.translate(clamp(p.x - cx, 72, LOGICAL_W - 72), p.y - cy - p.t * 34); ctx.scale(s, s);
       ctx.font = (p.spaced ? '600 ' : '300 ') + p.size + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       try { ctx.letterSpacing = p.spaced ? '0.22em' : '0em'; } catch (e) { /* older engines */ }
       ctx.fillStyle = p.color || ink;
@@ -543,48 +458,35 @@
 
   // ---------- UI ----------
   function show(node, on) { node.classList.toggle('hidden', !on); }
+  function applyTheme(t) {
+    const g = el.game.style;
+    g.setProperty('--bg', t.bg); g.setProperty('--ink', t.ink); g.setProperty('--muted', t.muted);
+    g.setProperty('--line', hexA(t.ink, 0.14)); g.setProperty('--overlay', hexA(t.bg, 0.94));
+    g.setProperty('--panel', t.dark ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.55)');
+    g.setProperty('--accent', SQUARE);
+    el.game.dataset.theme = t.dark ? 'dark' : 'light';
+  }
   function syncHud() {
     if (!run) return;
     el.score.textContent = fmt(run.score);
     const len = el.score.textContent.length;
     el.score.classList.toggle('mid', len === 5);
     el.score.classList.toggle('long', len > 5);
-    const onFairway = run.strokes >= 1 && run.ball.state === 'rest';
-    if (onFairway) { el.combo.textContent = 'Stroke ' + Math.min(run.strokes + 1, T.MAX_STROKES) + ' of ' + T.MAX_STROKES; el.combo.classList.add('stroke'); }
-    else { el.combo.textContent = run.combo >= 2 ? 'Streak ×' + run.combo : run.combo === 1 ? 'Perfect' : ''; el.combo.classList.remove('stroke'); }
+    el.combo.textContent = '';
     el.best.textContent = 'Best ' + fmt(Math.max(Save.d.best, run.score));
     el.mode.textContent = (run.mode === 'daily' ? 'Daily · ' : '') + THEMES[run.theme].name;
-    el.game.dataset.theme = THEMES[run.theme].dark ? 'dark' : 'light';
+    applyTheme(THEMES[run.theme]);
   }
   function renderMenu() {
-    const ch = CHARS[charIndex];
-    const unlocked = ch.unlock <= Save.d.best;
-    el.mName.textContent = ch.name;
-    el.mKind.textContent = unlocked ? 'Shape' : 'Unlock at ' + ch.unlock;
-    el.game.style.setProperty('--accent', ch.color);
-    const g = el.preview.getContext('2d');
-    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 112, 112);
-    g.setTransform(2, 0, 0, 2, 0, 0);
-    if (!unlocked) g.globalAlpha = 0.25;
-    drawShape(g, ch, 28, 28, 1, 1, -0.35);
-    if (!unlocked) {
-      g.globalAlpha = 1; const ink = THEMES[0].ink;
-      g.strokeStyle = ink; g.lineWidth = 2; g.lineCap = 'round'; g.beginPath(); g.arc(28, 24, 5, Math.PI, 0); g.stroke();
-      g.fillStyle = ink; rr(g, 21, 24, 14, 11, 3); g.fill();
-    }
-    el.mStats.textContent = 'Best ' + fmt(Save.d.best) + '  ·  streak ×' + Save.d.bestCombo + '  ·  ' + fmt(Save.d.totalHoles) + ' holes';
-    el.play.disabled = !unlocked;
-    el.play.textContent = unlocked ? 'Play' : 'Locked';
-    el.mDots.textContent = '';
-    CHARS.forEach((c, i) => { const s = document.createElement('span'); if (i === charIndex) s.className = 'on'; else if (c.unlock > Save.d.best) s.className = 'locked'; el.mDots.appendChild(s); });
+    el.mStats.textContent = 'Best ' + fmt(Save.d.best) + '  ·  ' + fmt(Save.d.totalPlatforms) + ' platforms in total';
     const done = Save.d.daily[todayKey()];
-    el.daily.innerHTML = done ? 'Daily done<small>' + fmt(done.score) + ' pts · ' + done.holes + ' holes · share</small>' : 'Daily #' + dayNumber() + '<small>one try · same for everyone</small>';
+    el.daily.innerHTML = done ? 'Daily done<small>' + fmt(done.score) + ' platforms · share</small>' : 'Daily #' + dayNumber() + '<small>one try · same for everyone</small>';
     el.soundBtn.textContent = 'Sound: ' + (Save.d.sound ? 'on' : 'off');
   }
   function showMenu() {
     state = 'menu';
     run = newRun('play', true);
-    el.game.dataset.theme = 'light';
+    applyTheme(THEMES[0]);
     show(el.hud, false); show(el.over, false); show(el.pause, false); show(el.help, false); show(el.menu, true);
     renderMenu();
   }
@@ -597,13 +499,12 @@
     lastT = performance.now();
   }
   function stripText(results) {
-    const map = { P: '🟩', N: '🟨', X: '🟥' };
-    const s = results.map((r) => map[r] || '').join('');
+    const s = results.map((r) => (r === 'X' ? '🟥' : '🟩')).join('');
     return results.length > 40 ? Array.from(s).slice(0, 40).join('') + '…' : s;
   }
   function shareText(res) {
     const url = location.href.split(/[?#]/)[0];
-    return 'Hop ⛳ Daily #' + res.day + '\n' + fmt(res.score) + ' pts · ' + res.holes + ' holes · best streak ×' + res.combo + '\n' + stripText(res.results) + '\n' + url;
+    return 'Hop ◼ Daily #' + res.day + '\n' + res.score + ' platforms\n' + stripText(res.results) + '\n' + url;
   }
   async function share(text) {
     try { if (navigator.share) { await navigator.share({ text }); return 'Shared'; } } catch (e) { if (e && e.name === 'AbortError') return 'Share'; }
@@ -615,7 +516,7 @@
     el.oEyebrow.textContent = o.eyebrow; el.oTitle.textContent = o.title; el.oStats.textContent = o.stats;
     el.oBest.textContent = o.best; el.oUnlock.textContent = o.unlock || '';
     el.oStrip.textContent = '';
-    (o.strip || []).slice(0, 60).forEach((r) => { const d = document.createElement('span'); d.className = r === 'P' ? 'p' : r === 'X' ? 'x' : 'n'; el.oStrip.appendChild(d); });
+    (o.strip || []).slice(0, 60).forEach((r) => { const d = document.createElement('span'); d.className = r === 'X' ? 'x' : 'n'; el.oStrip.appendChild(d); });
     show(el.oAgain, !o.daily); show(el.oShare, !!o.daily);
     el.oShare.textContent = 'Share';
     el.oShare.onclick = o.daily ? async () => { el.oShare.textContent = await share(shareText(o.daily)); } : null;
@@ -623,45 +524,40 @@
   }
   function showDailyDone(done) {
     run = newRun('play', true);
-    showOver({ eyebrow: 'Daily #' + done.day + ' · done', title: fmt(done.score) + ' points', stats: done.holes + ' holes · best streak ×' + done.combo, best: 'COME BACK TOMORROW', strip: done.results, unlock: '', daily: done });
+    showOver({ eyebrow: 'Daily #' + done.day + ' · done', title: done.score + ' platforms', stats: '', best: 'COME BACK TOMORROW', strip: done.results, unlock: '', daily: done });
     show(el.hud, false);
   }
   function pause() {
     if (state !== 'playing') return;
     state = 'paused';
-    if (run.ball.state === 'charge') { run.ball.state = 'rest'; run.ball.charge = 0; }
-    el.hint.classList.remove('on'); Sfx.charge(-1);
+    run.aim = null; el.hint.classList.remove('on'); Sfx.aim(-1);
     show(el.pause, true);
   }
   function resume() { if (state !== 'paused') return; state = 'playing'; show(el.pause, false); lastT = performance.now(); }
 
   // ---------- input ----------
-  function onDown(e) { if (e && e.preventDefault) e.preventDefault(); Sfx.init(); Sfx.resume(); press(); }
-  canvas.addEventListener('pointerdown', onDown);
-  window.addEventListener('pointerup', release);
-  window.addEventListener('pointercancel', release);
-  window.addEventListener('blur', release);
+  function toLogical(e) { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) / scale, y: (e.clientY - r.top) / scale }; }
+  canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); Sfx.init(); Sfx.resume(); aimStart(toLogical(e)); });
+  window.addEventListener('pointermove', (e) => { if (run && run.aim && !run.demo) aimMove(toLogical(e)); });
+  window.addEventListener('pointerup', aimEnd);
+  window.addEventListener('pointercancel', () => { if (run) run.aim = null; el.hint.classList.remove('on'); Sfx.aim(-1); });
+  window.addEventListener('blur', () => { if (run) run.aim = null; el.hint.classList.remove('on'); Sfx.aim(-1); });
   canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
   document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
-    if (e.code === 'Space' || e.code === 'ArrowUp') {
-      e.preventDefault();
-      if (state === 'playing') { Sfx.init(); press(); }
-      else if (state === 'paused') resume();
+    if (e.code === 'Space' || e.code === 'Enter') {
+      if (state === 'paused') resume();
       else if (state === 'over' && run && run.mode === 'play') startRun('play');
-      else if (state === 'menu' && !el.play.disabled) startRun('play');
+      else if (state === 'menu') startRun('play');
     }
     if (e.code === 'Escape' && state === 'playing') pause();
   });
-  window.addEventListener('keyup', (e) => { if (e.code === 'Space' || e.code === 'ArrowUp') release(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
-  el.prev.addEventListener('click', () => { charIndex = (charIndex + CHARS.length - 1) % CHARS.length; Save.d.char = CHARS[charIndex].id; Save.save(); renderMenu(); });
-  el.nextBtn.addEventListener('click', () => { charIndex = (charIndex + 1) % CHARS.length; Save.d.char = CHARS[charIndex].id; Save.save(); renderMenu(); });
-  el.play.addEventListener('click', () => { if (!el.play.disabled) { Sfx.init(); Sfx.resume(); startRun('play'); } });
+  el.play.addEventListener('click', () => { Sfx.init(); Sfx.resume(); startRun('play'); });
   el.daily.addEventListener('click', () => { Sfx.init(); Sfx.resume(); const done = Save.d.daily[todayKey()]; if (done) showDailyDone(done); else startRun('daily'); });
   el.helpBtn.addEventListener('click', () => show(el.help, true));
   el.helpClose.addEventListener('click', () => show(el.help, false));
@@ -690,9 +586,9 @@
 
   // Exposed for automated tests and console tuning.
   window.Hop = {
-    get state() { return state; }, get run() { return run; }, get charIndex() { return charIndex; }, get yGround() { return yGround; }, get H() { return H; },
-    start: startRun, menu: showMenu, save: Save, data: DATA, press, release, sync: syncHud,
-    simulateShot, solveShot, groundAt,
-    hitWithPower(p) { if (!run || run.dead || run.ball.state !== 'rest') return false; fire(p); return true; },
+    get state() { return state; }, get run() { return run; }, get H() { return H; }, get scale() { return scale; },
+    start: startRun, menu: showMenu, save: Save, data: DATA, sync: syncHud,
+    simulateLaunch, solveLaunch, aimVector,
+    launch(vx, vy) { if (!run || run.dead || run.ball.state !== 'rest') return false; launchWith(vx, vy); return true; },
   };
 })();

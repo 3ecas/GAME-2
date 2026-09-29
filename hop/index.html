@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hop">
 <meta name="theme-color" content="#f7f1e6">
-<meta name="description" content="Hold to charge, release to hit. Land on the green, roll into the cup. A one-thumb chip-shot game for the metro.">
+<meta name="description" content="Pull back, release, land on the next platform. A one-thumb slingshot hopper for the metro.">
 <title>Hop</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -26,30 +26,24 @@
       <div class="label right" id="hud-best">BEST 0</div>
     </div>
     <div class="hud-bottom">
-      <div id="hud-hint" class="hint">Hold to hit</div>
+      <div id="hud-hint" class="hint">Pull back and release</div>
     </div>
   </div>
 
   <div id="menu" class="layer overlay">
-    <div class="eyebrow">Chip and roll</div>
+    <div class="eyebrow">Platform to platform</div>
     <h1 class="title">HOP</h1>
-    <p class="sub">Hold to charge, release to hit.<br>Land on the green, roll into the cup.</p>
-    <div class="picker">
-      <button class="arrow" id="prev" aria-label="Previous character">‹</button>
-      <div class="char-card"><canvas id="m-preview" width="112" height="112"></canvas><div style="min-width:0"><div class="kind" id="m-kind">Shape</div><div class="cname" id="m-name">Square</div></div></div>
-      <button class="arrow" id="next" aria-label="Next character">›</button>
-    </div>
-    <div class="dots" id="m-dots"></div>
+    <p class="sub">Pull back, release.<br>Land on the next platform.</p>
     <div class="stats" id="m-stats"></div>
-    <button class="btn" id="play">PLAY</button>
-    <button class="btn secondary" id="daily">DAILY</button>
+    <button class="btn" id="play">Play</button>
+    <button class="btn secondary" id="daily">Daily</button>
     <div class="row"><button class="link" id="help-btn">How to play</button><button class="link" id="sound-btn">Sound: on</button></div>
   </div>
 
   <div id="over" class="layer overlay hidden">
     <div class="eyebrow" id="o-eyebrow">Missed</div>
     <div class="reason" id="o-title">Fell short</div>
-    <div class="big" id="o-stats">0 pts · 0 holes · best streak ×0</div>
+    <div class="big" id="o-stats">0 platforms</div>
     <div class="bestline" id="o-best"></div>
     <div class="strip" id="o-strip"></div>
     <div class="unlock" id="o-unlock"></div>
@@ -65,10 +59,10 @@
 
   <div id="help" class="layer overlay hidden">
     <div class="card">
-      <div><b>Hold</b> anywhere to charge, <b>release</b> to hit. The ring shows the power.</div>
-      <div>The shape flies, bounces, and rolls out. Stop it on the <b>green</b> to move to the next hole.</div>
-      <div>Roll it into the <b>cup</b> on your first stroke for a perfect. Every perfect in a row is worth more: 2, 4, 6, 8…</div>
-      <div>Stopped short on the fairway? You get up to <b>three strokes</b> per hole. Water is a miss.</div>
+      <div><b>Press</b> anywhere and <b>pull back</b>, like a slingshot. The square launches the opposite way. Pull further for more speed.</div>
+      <div>Gravity does the rest. The square spins in the air, bounces where it lands, and slides to a stop.</div>
+      <div>Stop on the <b>next platform</b> and you score. Jump over one for two.</div>
+      <div>Slide off an edge, hit a side, or miss, and the run ends.</div>
       <div>Every day has one <b>Daily</b> course, the same for everyone. One try.</div>
       <button class="btn secondary" id="help-close" style="margin-top:6px">Got it</button>
     </div>

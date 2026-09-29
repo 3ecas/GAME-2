@@ -10,7 +10,7 @@ Simple, addictive games for short sessions on the metro, bus, or bathroom. Web-f
 ## Layout
 
 - `index.html` is the hub page linking to each game.
-- One folder per game, self-contained: `next-stop/` (metro braking) and `hop/` (chip-shot golf with flat pastel shapes) are live; maybe `sushi-belt/` next. Rank was dropped.
+- One folder per game, self-contained: `next-stop/` (metro braking) and `hop/` (slingshot platform hopper: one square, flat platforms, real physics) are live; maybe `sushi-belt/` next. Rank was dropped.
 - `IDEAS.md` holds the concept shortlist. Each game has its own `README.md` with the design and tuning notes.
 
 ## Conventions

@@ -1,63 +1,46 @@
 # Hop
 
-Hold to charge, release to hit. The shape flies, spins, bounces and rolls out. Stop it on the green to move on, roll it into the cup on your first stroke for a perfect. A side-view chip-shot game for one thumb, drawn in flat pastel geometry: no shadows, no gradients, no outlines.
+A square, some platforms, a slingshot. Pull back, release, and the square launches the opposite way. Gravity, spin, bounce and slide do the rest. Land on the next platform to score. Flat pastel rectangles and nothing else: no background, no shadows, no round shapes.
 
 ## Play
 
 - Open `hop/index.html` from the published site, or serve the repo root locally (`python3 -m http.server 8123`) and open `http://localhost:8123/hop/`.
-- Hold anywhere to charge (a ring fills around the shape), release to hit. Space bar on a desktop, Escape pauses.
+- Press anywhere, pull back like a slingshot, release. Pulling further gives more speed; the direction is the opposite of the pull. Pulls shorter than 12 px are ignored, so a tap does nothing. Escape pauses.
 
 ## Core loop
 
-1. The shape rests on the ground. Every hit leaves at the same angle; holding longer means more speed.
-2. It flies on a real parabola, spinning forward. On landing it bounces (a third of its downward speed comes back, half its forward speed is lost to the surface), then rolls with friction until it stops.
-3. Water is a miss: the channel right after every green, and on later holes a hazard cutting the fairway.
-4. Stop on the **green** and the hole is done, worth 1. Stop short on the fairway and you hit again from there, up to three strokes per hole.
-5. Roll over the **cup** slowly enough and the shape drops in. On the first stroke of a hole that is a PERFECT, worth 2 × streak (2, 4, 6, 8…). On a later stroke it is IN, worth 2, and the streak resets.
-
-A run is a minute or a few. Restart is one tap.
+1. The square rests on a platform. A pull shows a short band toward the finger and a dashed line the way the square will go, its length showing the power.
+2. On release the square flies on a real parabola, spinning forward.
+3. On landing it bounces (30 percent of its downward speed comes back, 45 percent of its forward speed is lost), then slides with friction until it stops. If it slides off an edge it falls again. Once at rest it settles onto a flat side.
+4. Stop on a platform beyond the current one and you score one point per platform passed, so clearing two at once is worth 2.
+5. Falling below the platforms, or hitting the side of one and dropping, ends the run.
 
 ## Physics
 
-All numbers live in `data.js`. Gravity 1800 px/s², launch angle 52°, launch speed 300 to 690 px/s, so a full hit carries about 257 px in the air before the roll. Bounce restitution 0.32, surface friction on each bounce 0.5, rolling deceleration 320 px/s². The cup takes the ball when it rolls over at under 160 px/s, or lands on it at under 220 px/s.
-
-The ball is integrated with a fixed step of 1/240 s inside an accumulator, so a 60 Hz phone and a 120 Hz phone play the same shot from the same hold. `simulateShot(power)` runs the same integrator without side effects; `solveShot(x)` scans powers to find the one that sinks or stops closest to a point. The demo behind the menu uses it, and so do the tests.
+All numbers live in `data.js`. Gravity 1800 px/s², launch speed up to 820 px/s at a full 140 px pull, so a flat 45° launch carries about 370 px. Bounce restitution 0.3, surface friction on each bounce 0.55, sliding deceleration 420 px/s². The square is integrated with a fixed step of 1/240 s inside an accumulator, so a 60 Hz phone and a 120 Hz phone play the same launch. `simulateLaunch(vx, vy)` runs the same integrator without side effects and `solveLaunch(j)` scans angles and powers for a launch that rests on platform `j`; the demo behind the menu uses it, and so do the tests.
 
 ## Course
 
-Every hole is generated in sequence: a water channel right after the previous green, a stretch of fairway, then the green with its cup somewhere between 35 and 65 percent of the way along. Over the first 50 holes the channel widens from 30 to 56 px, the green narrows from 70–110 px to 46–72 px, and from hole 6 a water hazard can cut the fairway with rising odds. The camera keeps the resting shape near the left edge so the flag is always in view.
-
-## Scoring
-
-| Result | Points |
-| --- | --- |
-| Perfect (in the cup on the first stroke) | 2 × streak |
-| In the cup on a later stroke | 2, streak resets |
-| Stopped on the green | 1, streak resets |
-| Water, or three strokes without reaching the green | run ends |
-
-## Shapes
-
-Seven shapes, unlocked by best score: Square (0), Circle (25), Triangle (75), Diamond (150), Hexagon (300), Star (600), Plus (1200). A shape is a name and a pastel in `data.js`; the pastel is also the flag, the charge ring and the perfect popups. Paths live in `shapePath`. Every shape has a small off-center dot so the spin reads even on the circle.
+Platforms are generated one at a time. Each new one is placed at a random gap and height change from the previous, and the gap is capped so the platform is reachable at full pull from anywhere on the previous one, including uphill. Over the first 50 platforms the widths shrink from 84–124 px to 46–72 px, the gaps grow from 50–130 px to 100–190 px, and the height changes grow from ±30 px to 110 px up or 80 px down. Platforms stay within 320 px of the first one's height.
 
 ## Palettes
 
-Four flat pastel palettes, one every 15 holes: Meadow, Peach, Lilac, Dusk. Sky, ground, green and water are plain fills; the only "detail" is a flat sun. Colors crossfade on the first hole of a new palette, and the UI flips to light text in Dusk.
+Four flat palettes, one every 25 platforms: Cream, Mint, Lilac, Dusk. Each is a background, a platform color and two text colors. They crossfade on the first landing in a new palette, and the UI flips to light text in Dusk. The square is always the same coral.
 
 ## Daily
 
-One course per day, seeded from the date so everyone plays the same holes. One try. The share button produces a line of score, holes and streak plus a strip of squares, and the day number counts from 2026-09-29.
+One course per day, seeded from the date so everyone plays the same platforms. One try. The share button produces a line with the day, the platform count and a strip of squares, and the day number counts from 2026-09-29.
 
 ## Feel
 
-- Squash on charge and on every bounce, spin in the air, roll-out on the ground.
-- Particles are small flat dots and thin rings: a few on the hit and each bounce, a burst and two rings on a perfect, ripples on a splash.
-- Optional synthesized sound: a rising tone while charging, a thock on the hit, ticks on bounces, chimes that climb with the streak, a splash. Fully playable on mute.
-- Haptics go through the same `haptic()` hook as Next Stop. The game pauses itself in the background and cancels a charge in progress.
+- Squash toward the pull while aiming, a stretch on launch, squash on every bounce, spin in the air, slide-out on the platform.
+- Particles are tiny spinning squares on launch and on bounces.
+- Optional synthesized sound: a rising tone while pulling, a thock on launch, ticks on bounces, a two-note chime on scoring, a low drop on a fall. Fully playable on mute.
+- Haptics go through the same `haptic()` hook as Next Stop. The game pauses itself in the background and cancels a pull in progress.
 
 ## Tech
 
-Vanilla JavaScript, one canvas, no dependencies, no build step. Logical width 390 px, ground at 68 percent of the height. Progress is in `localStorage` under `hop.v2`. `window.Hop` exposes state plus `simulateShot`, `solveShot`, `hitWithPower` and `groundAt` for tests and tuning. Installable and offline capable via `manifest.webmanifest` and `sw.js`.
+Vanilla JavaScript, one canvas, no dependencies, no build step. Logical width 390 px, a 2D camera that keeps the resting square near the left and at 60 percent of the height. Progress is in `localStorage` under `hop.v3`. `window.Hop` exposes state plus `simulateLaunch`, `solveLaunch`, `aimVector` and `launch` for tests and tuning. Installable and offline capable via `manifest.webmanifest` and `sw.js`.
 
 ## Ship to the App Store
 
@@ -65,6 +48,6 @@ Same recipe as Next Stop: Capacitor with `--web-dir hop`, portrait only, and hap
 
 ## Roadmap
 
-- Wind, shown as a small arrow, that shifts the flight a little.
-- Slopes on the green that curve the roll.
+- Moving platforms after a while.
+- A dead-center bonus if the scoring wants more depth.
 - Game Center leaderboard once wrapped.
