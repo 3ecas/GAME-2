@@ -167,14 +167,16 @@
   function line(x0, y0, x1, y1) { const len = Math.hypot(x1 - x0, y1 - y0) || 1; return { x0, y0, x1, y1, nx: (y1 - y0) / len, ny: -(x1 - x0) / len }; }
   function addSeg(r, x0, y0, x1, y1, kind) {
     const floor = kind === 'hole' ? Math.max(y0, y1) + T.HOLE_DEPTH : 0;
-    const pit = floor + 80;
+    const pit = floor + 40; // the crevasse bottom you can see, a little below where the fall counts
     const lines = kind === 'hole' ? [line(x0, y0, x0, pit), line(x0, pit, x1, pit), line(x1, pit, x1, y1)] : [line(x0, y0, x1, y1)];
     r.segs.push({ x0, y0, x1, y1, kind, floor, pit, lines });
   }
   function addLedge(r, x, y, d) { addSeg(r, x, y, x + pick(T.LEDGE, d, r.rng()), y, 'ledge'); }
-  // Between two ledges come one or two obstacles: a step up, a crevasse, a step down. Nothing is ever sloped.
-  // Steps have no width, so the only pairs are a crevasse whose far rim is the foot of a step, and a step down
-  // straight into a crevasse; anything else would put two verticals at one x and make a fin or a crack.
+  // Between two ledges come one or two obstacles: a step up, a 45° ramp, a crevasse, and rarely a small step
+  // down or 45° descent, so the mountain goes up.
+  // Pairs are limited to the shapes that keep every corner of the outline at 90° or wider and never put two
+  // verticals at one x: crevasse then step, crevasse then ramp, step down or descent into a crevasse, ramp then
+  // step, step then ramp. Crevasses only appear above HOLE_FROM_M.
   // A group is kept only when the physics can land on its ledge from the middle of the ledge before it, with
   // a few different launches so a near miss still has a chance; otherwise it is rolled again, a little smaller.
   // The run starts with a short stretch and adds one group per frame as the square climbs, so no frame stalls.
@@ -185,21 +187,32 @@
   // After eight failed attempts a modest single step goes in, which a half pull clears. Returns true when a group went in.
   function tryGroup(r) {
     const from = r.segs[r.segs.length - 1], rng = r.rng, attempt = r.attempt || 0;
-    const d = clamp((-from.y1 * T.M_PER_PX) / T.RAMP_M, 0, 1), n0 = r.segs.length;
+    const m = -from.y1 * T.M_PER_PX, d = clamp(m / T.RAMP_M, 0, 1), n0 = r.segs.length, holes = m >= T.HOLE_FROM_M;
     if (attempt >= 8) {
       addSeg(r, from.x1, from.y1, from.x1, from.y1 - 30, 'wall'); addLedge(r, from.x1, from.y1 - 30, d);
       r.attempt = 0; return true;
     }
     r.attempt = attempt + 1;
     const shrink = Math.pow(0.85, attempt);
-    let kinds;
-    if (rng() < lerp(T.LEDGE_P[0], T.LEDGE_P[1], d)) { const roll = rng(); kinds = [roll < 0.55 ? 'wall' : roll < 0.85 ? 'hole' : 'drop']; }
-    else kinds = rng() < 0.65 ? ['hole', 'wall'] : ['drop', 'hole'];
+    let kinds; const roll = rng();
+    if (rng() < lerp(T.LEDGE_P[0], T.LEDGE_P[1], d)) {
+      kinds = holes ? [roll < 0.38 ? 'wall' : roll < 0.68 ? 'ramp' : roll < 0.92 ? 'hole' : roll < 0.96 ? 'drop' : 'desc']
+        : [roll < 0.5 ? 'wall' : roll < 0.92 ? 'ramp' : roll < 0.96 ? 'drop' : 'desc'];
+    } else {
+      kinds = holes ? (roll < 0.3 ? ['hole', 'wall'] : roll < 0.38 ? ['drop', 'hole'] : roll < 0.58 ? ['hole', 'ramp'] : roll < 0.78 ? ['ramp', 'wall'] : roll < 0.96 ? ['wall', 'ramp'] : ['desc', 'hole'])
+        : (roll < 0.5 ? ['ramp', 'wall'] : ['wall', 'ramp']);
+    }
+    const run45 = 1 / Math.tan(T.RAMP_DEG * RAD);
     let x = from.x1, y = from.y1, gain = 0;
     for (const kind of kinds) {
       if (kind === 'wall') { const h = Math.round(pick(T.WALL_H, d, rng()) * shrink); addSeg(r, x, y, x, y - h, 'wall'); y -= h; gain += h; }
-      else if (kind === 'hole') { const w = Math.round(pick(T.HOLE_W, d, rng()) * shrink); addSeg(r, x, y, x + w, y, 'hole'); x += w; }
-      else { const h = Math.round(lerp(T.DROP[0], T.DROP[1], rng())); addSeg(r, x, y, x, y + h, 'wall'); y += h; gain -= h; }
+      else if (kind === 'ramp') { const h = Math.round(pick(T.RAMP_H, d, rng()) * shrink), w = h * run45; addSeg(r, x, y, x + w, y - h, 'slope'); x += w; y -= h; gain += h; }
+      else if (kind === 'hole') {
+        if (-y * T.M_PER_PX < T.HOLE_FROM_M) { r.segs.length = n0; return false; } // a step down took the rim below the line
+        const w = Math.round(pick(T.HOLE_W, d, rng()) * shrink); addSeg(r, x, y, x + w, y, 'hole'); x += w;
+      }
+      else if (kind === 'drop') { const h = Math.round(lerp(T.DROP[0], T.DROP[1], rng())); addSeg(r, x, y, x, y + h, 'wall'); y += h; gain -= h; }
+      else { const h = Math.round(lerp(T.DROP[0], T.DROP[1], rng())), w = h * run45; addSeg(r, x, y, x + w, y + h, 'slope'); x += w; y += h; gain -= h; }
     }
     if (gain <= T.MAX_GAIN) {
       addLedge(r, x, y, d);
@@ -307,6 +320,8 @@
         b.ang += (target - b.ang) * T.FACE_SNAP;
       }
     }
+    // a tumbling block loses its spin fast: drag on rotation while any corner touches
+    if (contacts > 0 && T.SPIN_DRAG > 0) b.av *= Math.exp(-T.SPIN_DRAG * dt);
     // never inside the rock: if the center somehow got below the surface, lift it out
     const sy = surfaceY(b.x), sg = segAt(b.x);
     if (sg && sg.kind !== 'hole' && b.y > sy + HALF * 0.5) { b.y = sy - HALF; if (b.vy > 0) b.vy = 0; }
@@ -341,14 +356,14 @@
     const b = { x: src.x, y: src.y, vx, vy, ang: src.ang, av: 0, state: 'air', restT: 0, airT: 0, groundY: src.groundY, cx: 0, cy: 0, impact: 0 };
     const sp = Math.hypot(vx, vy);
     b.av = (sp / HALF) * T.SPIN * (vx >= 0 ? 1 : -1);
-    let t = 0, ev = null, touchY = Infinity;
+    let t = 0, ev = null, touchY = Infinity, hitT = -1, hitAng = 0;
     while (t < 8) {
       if (stop && b.y > stop.y && (stop.dir > 0 ? b.x > stop.x : b.x < stop.x)) break;
       ev = stepBall(b, T.STEP); t += T.STEP;
-      if (ev === 'hit' || ev === 'rest') touchY = Math.min(touchY, b.groundY);
+      if (ev === 'hit' || ev === 'rest') { touchY = Math.min(touchY, b.groundY); if (hitT < 0) { hitT = t; hitAng = b.ang; } }
       if (ev === 'rest' || ev === 'fall') break;
     }
-    return { state: b.state, x: b.x, y: b.y, bottom: b.groundY, ang: b.ang, touchY, t };
+    return { state: b.state, x: b.x, y: b.y, bottom: b.groundY, ang: b.ang, touchY, t, hitT, hitAng };
   }
   // Scan launches from `src` toward the middle of ledge `seg` and keep the one resting nearest it, stopping
   // early once one lands within 4 px of it. With `want`, it instead stops as soon as that many launches rest on
@@ -555,7 +570,7 @@
     ctx.moveTo(segs[i0].x0 - cx, H + 80); ctx.lineTo(segs[i0].x0 - cx, segs[i0].y0 - cy);
     for (let j = i0; j <= i1; j++) {
       const s = segs[j];
-      if (s.kind === 'hole') { ctx.lineTo(s.x0 - cx, s.floor + 80 - cy); ctx.lineTo(s.x1 - cx, s.floor + 80 - cy); }
+      if (s.kind === 'hole') { ctx.lineTo(s.x0 - cx, s.pit - cy); ctx.lineTo(s.x1 - cx, s.pit - cy); }
       ctx.lineTo(s.x1 - cx, s.y1 - cy);
     }
     ctx.lineTo(segs[i1].x1 - cx, H + 80); ctx.closePath(); ctx.fill();
