@@ -5,7 +5,7 @@ Simple, addictive games for short sessions on the metro, bus, or bathroom. Web-f
 ## Workflow
 
 - Commit and push directly to `main`. Do not create feature branches or pull requests unless asked.
-- Every push to `main` deploys the repo root to GitHub Pages via `.github/workflows/pages.yml`.
+- Every push to `main` deploys the repo root to GitHub Pages via `.github/workflows/static.yml` (the one GitHub generated when Pages was enabled).
 
 ## Layout
 
