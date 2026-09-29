@@ -10,7 +10,7 @@ Simple, addictive games for short sessions on the metro, bus, or bathroom. Web-f
 ## Layout
 
 - `index.html` is the hub page linking to each game.
-- One folder per game, self-contained: `next-stop/` (live), then `rank/`, `hop/`, and maybe `sushi-belt/`.
+- One folder per game, self-contained: `next-stop/` and `hop/` are live; maybe `sushi-belt/` next. Rank was dropped.
 - `IDEAS.md` holds the concept shortlist. Each game has its own `README.md` with the design and tuning notes.
 
 ## Conventions
@@ -22,5 +22,5 @@ Simple, addictive games for short sessions on the metro, bus, or bathroom. Web-f
 
 ## Run and test
 
-- Serve: `python3 -m http.server 8123` from the repo root, then open `http://localhost:8123/next-stop/`.
+- Serve: `python3 -m http.server 8123` from the repo root, then open `http://localhost:8123/next-stop/` or `http://localhost:8123/hop/`.
 - Headless checks use the globally installed Playwright: `NODE_PATH=/opt/node22/lib/node_modules node <script>.cjs` with `chromium.launch()`.
