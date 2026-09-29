@@ -10,7 +10,7 @@ Simple, addictive games for short sessions on the metro, bus, or bathroom. Web-f
 ## Layout
 
 - `index.html` is the hub page linking to each game.
-- One folder per game, self-contained: `next-stop/` (metro braking) and `hop/` (slingshot mountain climber: one square, a mountain of ledges, vertical steps and 45° ramps, rigid-body physics, score is height) are live; maybe `sushi-belt/` next. Rank was dropped.
+- One folder per game, self-contained: `next-stop/` (metro braking) and `hop/` (slingshot climber: one square, a chain of separate mountains made of ledges, vertical steps and 45° ramps with gaps between them, rigid-body physics, score is height) are live; maybe `sushi-belt/` next. Rank was dropped.
 - `IDEAS.md` holds the concept shortlist. Each game has its own `README.md` with the design and tuning notes.
 
 ## Conventions

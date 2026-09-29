@@ -1,6 +1,6 @@
 # Hop
 
-A square, a mountain, a slingshot. Pull back, release, and the square launches the opposite way. Gravity, spin, bounce, skid and friction do the rest. The score is the highest point you touch, in meters, and the best height is kept. Flat pastel fills and nothing else: no background, no shadows, no round shapes. Every line is horizontal, vertical or a 45° diagonal, and no corner of the mountain is acute.
+A square, a chain of mountains, a slingshot. Pull back, release, and the square launches the opposite way. Gravity, spin, bounce, skid and friction do the rest. The score is the highest point you touch, in meters, and the best height is kept. Flat pastel fills and nothing else: no background, no shadows, no round shapes. Every line is horizontal, vertical or a 45° diagonal, no corner of a mountain is acute, and the gaps between mountains drop out of sight.
 
 ## Play
 
@@ -13,7 +13,7 @@ A square, a mountain, a slingshot. Pull back, release, and the square launches t
 2. On release it flies on a real parabola with a slow tumble.
 3. It is a rigid body: its four corners hit the mountain, not a point under it. A corner that lands first tips the square over; a face that lands flat stops it. Impacts bounce a little, friction acts at the corners, and both put torque on the body, so it tumbles, skids and rights itself the way a block does. It never changes shape.
 4. A block does not roll. Once two corners sit on the same surface the square is lying on a face: its spin is killed and the face is kept flush, so it skids to a stop without turning. While any corner touches the ground its spin decays fast, so a corner landing tips it onto a face and that is the end of it, about one quarter turn on average. Land on a 45° ramp and it slides back down on its face to the ledge below; clip a step and it tumbles down. The rewind is the physics, not a menu.
-5. Steps are vertical: hit one in flight and the square bounces off it and drops. Crevasses are slots in the mountain with a visible floor: fall into one and the run ends. They only appear above 50 m, so the first climb cannot end in one. Falling to the foot of the mountain, or twelve seconds without touching anything, ends it too.
+5. Steps are vertical: hit one in flight and the square bounces off it and drops. Each mountain ends at a gap that drops out of sight, and the next mountain rises on the far side: fall into a gap and the run ends. Gaps only appear above 50 m, so the first climb cannot end in one. Falling to the foot of the first mountain, or twelve seconds without touching anything, ends it too.
 6. Every ground contact updates the highest point reached. A rest higher than the last rest shows the meters gained; a rest lower shows where you slid back to.
 
 A run is a minute or a few. Restart is one tap.
@@ -32,7 +32,7 @@ Each fixed step moves and rotates the square, then runs three passes over its fo
 
 ## The mountain
 
-The mountain is one polyline of horizontals, verticals and 45° diagonals generated left to right: flat ledges separated by one or two obstacles. Obstacles are steps up (20–100 px, taller with height), 45° ramps (20–110 px of rise), crevasses (30–110 px wide, 150 px deep, only above 50 m) and rarely a small step down or 45° descent (16–40 px), so the mountain goes up. Pairs are limited to shapes that keep every corner of the outline at 90° or wider and never put two verticals at one x: crevasse then step, crevasse then ramp, step down or descent into a crevasse, ramp then step, step then ramp. Ledges shrink from 60–120 px to 44–90 px as the climb goes on, and no group may ask for more than 135 px of height in one launch.
+The course is one polyline of horizontals, verticals and 45° diagonals generated left to right, in units of a mountain: a run of flat ledges separated by steps up (20–100 px, taller with height), 45° ramps (20–110 px of rise), ramp-and-step pairs, and rarely a small step down or 45° descent (16–40 px), so the course goes up. Between two mountains lies one gap (30–120 px wide, a fall counts 150 px below the rim), sometimes with a step or ramp rising out of its far side or a step down or descent into it. Gaps only appear above 50 m, and each mountain is 4–7 ledges long at the start, 2–5 at full difficulty. Every corner of the outline stays at 90° or wider and no two verticals share an x. Ledges shrink from 60–120 px to 40–80 px as the climb goes on, and no group may ask for more than 135 px of height in one launch.
 
 Every group is proven before it is kept: the generator test-flies launches from the middle of the previous ledge with the real physics (six angles, 24 powers) and keeps the group only if at least five of them come to rest on the new ledge. A typical ledge gets about 27. A group that fails is rolled again a little smaller, up to eight times, then a modest single step goes in. The run starts with 700 px of mountain and adds one attempt per frame while the square rests, so nothing stalls a flight. Difficulty ramps over the first 300 m of climb. One pixel is 10 cm; height marks appear every 50 m.
 

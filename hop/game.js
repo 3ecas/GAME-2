@@ -167,16 +167,16 @@
   function line(x0, y0, x1, y1) { const len = Math.hypot(x1 - x0, y1 - y0) || 1; return { x0, y0, x1, y1, nx: (y1 - y0) / len, ny: -(x1 - x0) / len }; }
   function addSeg(r, x0, y0, x1, y1, kind) {
     const floor = kind === 'hole' ? Math.max(y0, y1) + T.HOLE_DEPTH : 0;
-    const pit = floor + 40; // the crevasse bottom you can see, a little below where the fall counts
+    const pit = floor + 40; // where corners stop inside a gap, below the line where the fall already counts
     const lines = kind === 'hole' ? [line(x0, y0, x0, pit), line(x0, pit, x1, pit), line(x1, pit, x1, y1)] : [line(x0, y0, x1, y1)];
     r.segs.push({ x0, y0, x1, y1, kind, floor, pit, lines });
   }
   function addLedge(r, x, y, d) { addSeg(r, x, y, x + pick(T.LEDGE, d, r.rng()), y, 'ledge'); }
-  // Between two ledges come one or two obstacles: a step up, a 45° ramp, a crevasse, and rarely a small step
-  // down or 45° descent, so the mountain goes up.
-  // Pairs are limited to the shapes that keep every corner of the outline at 90° or wider and never put two
-  // verticals at one x: crevasse then step, crevasse then ramp, step down or descent into a crevasse, ramp then
-  // step, step then ramp. Crevasses only appear above HOLE_FROM_M.
+  // The course is a chain of mountains. Inside a mountain, two ledges are separated by a step up, a 45° ramp,
+  // rarely a small step down or 45° descent, or a ramp-and-step pair. Between two mountains lies one gap: a
+  // hole, sometimes with a step or ramp rising out of its far side, or a step down or descent into it. Every
+  // corner of the outline stays at 90° or wider and no two verticals share an x. Gaps only appear above
+  // HOLE_FROM_M, and each mountain is MOUNTAIN_GROUPS ledges long.
   // A group is kept only when the physics can land on its ledge from the middle of the ledge before it, with
   // a few different launches so a near miss still has a chance; otherwise it is rolled again, a little smaller.
   // The run starts with a short stretch and adds one group per frame as the square climbs, so no frame stalls.
@@ -187,21 +187,18 @@
   // After eight failed attempts a modest single step goes in, which a half pull clears. Returns true when a group went in.
   function tryGroup(r) {
     const from = r.segs[r.segs.length - 1], rng = r.rng, attempt = r.attempt || 0;
-    const m = -from.y1 * T.M_PER_PX, d = clamp(m / T.RAMP_M, 0, 1), n0 = r.segs.length, holes = m >= T.HOLE_FROM_M;
+    const m = -from.y1 * T.M_PER_PX, d = clamp(m / T.RAMP_M, 0, 1), n0 = r.segs.length;
+    const gap = m >= T.HOLE_FROM_M && (r.left || 0) <= 0; // this mountain is done: a gap, then the next one
     if (attempt >= 8) {
       addSeg(r, from.x1, from.y1, from.x1, from.y1 - 30, 'wall'); addLedge(r, from.x1, from.y1 - 30, d);
-      r.attempt = 0; return true;
+      r.attempt = 0; r.left = (r.left || 0) - 1; return true;
     }
     r.attempt = attempt + 1;
     const shrink = Math.pow(0.85, attempt);
     let kinds; const roll = rng();
-    if (rng() < lerp(T.LEDGE_P[0], T.LEDGE_P[1], d)) {
-      kinds = holes ? [roll < 0.38 ? 'wall' : roll < 0.68 ? 'ramp' : roll < 0.92 ? 'hole' : roll < 0.96 ? 'drop' : 'desc']
-        : [roll < 0.5 ? 'wall' : roll < 0.92 ? 'ramp' : roll < 0.96 ? 'drop' : 'desc'];
-    } else {
-      kinds = holes ? (roll < 0.3 ? ['hole', 'wall'] : roll < 0.38 ? ['drop', 'hole'] : roll < 0.58 ? ['hole', 'ramp'] : roll < 0.78 ? ['ramp', 'wall'] : roll < 0.96 ? ['wall', 'ramp'] : ['desc', 'hole'])
-        : (roll < 0.5 ? ['ramp', 'wall'] : ['wall', 'ramp']);
-    }
+    if (gap) kinds = roll < 0.5 ? ['hole'] : roll < 0.7 ? ['hole', 'wall'] : roll < 0.9 ? ['hole', 'ramp'] : roll < 0.95 ? ['drop', 'hole'] : ['desc', 'hole'];
+    else if (rng() < lerp(T.LEDGE_P[0], T.LEDGE_P[1], d)) kinds = [roll < 0.5 ? 'wall' : roll < 0.92 ? 'ramp' : roll < 0.96 ? 'drop' : 'desc'];
+    else kinds = roll < 0.5 ? ['ramp', 'wall'] : ['wall', 'ramp'];
     const run45 = 1 / Math.tan(T.RAMP_DEG * RAD);
     let x = from.x1, y = from.y1, gain = 0;
     for (const kind of kinds) {
@@ -216,7 +213,11 @@
     }
     if (gain <= T.MAX_GAIN) {
       addLedge(r, x, y, d);
-      if (reachable(from, r.segs[r.segs.length - 1])) { r.attempt = 0; return true; }
+      if (reachable(from, r.segs[r.segs.length - 1])) {
+        r.attempt = 0;
+        r.left = gap ? Math.round(pick(T.MOUNTAIN_GROUPS, d, rng())) : (r.left || 0) - 1;
+        return true;
+      }
     }
     r.segs.length = n0;
     return false;
@@ -563,14 +564,14 @@
     if (run.shake > 0.3) ctx.translate((Math.random() - 0.5) * run.shake, (Math.random() - 0.5) * run.shake);
     ctx.fillStyle = col('bg'); ctx.fillRect(0, 0, LOGICAL_W, H);
 
-    // the mountain: one polygon under the surface, dipping into each crevasse
+    // the mountains: one fill under the outline that drops out of sight at every gap, so each mountain stands apart
     let i0 = 0; while (i0 < segs.length - 1 && segs[i0].x1 < cx - 60) i0++;
     let i1 = i0; while (i1 < segs.length - 1 && segs[i1].x0 <= cx + LOGICAL_W + 60) i1++;
     ctx.fillStyle = col('mount'); ctx.beginPath();
     ctx.moveTo(segs[i0].x0 - cx, H + 80); ctx.lineTo(segs[i0].x0 - cx, segs[i0].y0 - cy);
     for (let j = i0; j <= i1; j++) {
       const s = segs[j];
-      if (s.kind === 'hole') { ctx.lineTo(s.x0 - cx, s.pit - cy); ctx.lineTo(s.x1 - cx, s.pit - cy); }
+      if (s.kind === 'hole') { ctx.lineTo(s.x0 - cx, H + 80); ctx.lineTo(s.x1 - cx, H + 80); }
       ctx.lineTo(s.x1 - cx, s.y1 - cy);
     }
     ctx.lineTo(segs[i1].x1 - cx, H + 80); ctx.closePath(); ctx.fill();

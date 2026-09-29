@@ -25,17 +25,19 @@
      WALL_H            height of a step up
      RAMP_H            height of a diagonal ramp up
      RAMP_DEG          angle of every diagonal, ramps and descents alike (45: rise equals run)
-     HOLE_W            crevasse width
-     HOLE_DEPTH        how far down a crevasse goes before the fall counts
-     HOLE_FROM_M       no crevasses below this height, so the first climb cannot end in one
-     DROP              height of the occasional step down or diagonal descent (rare: the mountain goes up)
+     HOLE_W            width of the gap between two mountains
+     HOLE_DEPTH        how far below the rim a fall into a gap counts
+     HOLE_FROM_M       no gaps below this height, so the first climb cannot end in one
+     MOUNTAIN_GROUPS   ledges per mountain between two gaps, [[min,max] at start, [min,max] at full difficulty]
+     DROP              height of the occasional step down or diagonal descent (rare: the course goes up)
      LEDGE_P           chance that only one obstacle separates two ledges, start and full difficulty
      MAX_GAIN          height one launch can be asked to gain between two ledges
      THEME_M           meters per palette
 
-   The mountain is straight lines only: flat ledges, vertical steps, 45° diagonals and crevasses, with no acute
-   corner anywhere. Every ledge is proven reachable from the middle of the one before it by test-flying launches
-   with the real physics while it is generated.
+   The course is a chain of separate mountains, each a run of ledges, vertical steps and 45° diagonals with no
+   acute corner, divided by gaps that drop out of sight. Ledges shrink and steps grow with height. Every ledge is
+   proven reachable from the middle of the one before it by test-flying launches with the real physics while it
+   is generated, so it gets hard but never impossible.
 
    themes: flat colors only. `dark` flips the UI to light text.
 */
@@ -46,9 +48,9 @@ window.HOP_DATA = {
     REST_V: 14, REST_W: 0.7, REST_TIME: 0.25, AIR_TIMEOUT: 12, STEP: 1 / 240,
     CAM_X: 0.42, CAM_Y: 0.62,
     M_PER_PX: 0.1, RAMP_M: 300,
-    LEDGE: [[60, 120], [44, 90]],
+    LEDGE: [[60, 120], [40, 80]],
     WALL_H: [[20, 50], [40, 100]], RAMP_H: [[20, 60], [40, 110]], RAMP_DEG: 45,
-    HOLE_W: [[30, 60], [50, 110]], HOLE_DEPTH: 150, HOLE_FROM_M: 50, DROP: [16, 40],
+    HOLE_W: [[30, 60], [50, 120]], HOLE_DEPTH: 150, HOLE_FROM_M: 50, MOUNTAIN_GROUPS: [[4, 7], [2, 5]], DROP: [16, 40],
     LEDGE_P: [0.95, 0.6], MAX_GAIN: 135, THEME_M: 60,
   },
   square: '#f28b82',
