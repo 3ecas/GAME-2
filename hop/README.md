@@ -1,6 +1,6 @@
 # Hop
 
-Hold to charge, release to jump, land dead center. A side-view 2D hopper for one thumb, starring a cozy jelly cube in pastels.
+Hold to charge, release to jump, land dead center. A side-view 2D hopper for one thumb, drawn in the flat, quiet style of Mini Metro: plain shapes, soft gradients for depth, a tiny glow, and a lot of empty space.
 
 ## Play
 
@@ -9,9 +9,9 @@ Hold to charge, release to jump, land dead center. A side-view 2D hopper for one
 
 ## Core loop
 
-1. The character rests on a pad. Holding squashes it and fills a power bar above its head.
+1. The shape rests on a pad. Holding squashes it and fills a thin ring around it.
 2. Releasing launches it on a parabola. Full charge flies about 270 px; no charge about 44 px.
-3. Land on a pad to continue. Land on the dot in the middle for a PERFECT and a growing streak. Miss and you are in the water.
+3. Land on a pad to continue. Land on the dot in the middle for a PERFECT and a growing streak. Miss and the run ends with a few ripples on the baseline.
 4. The camera slides so the character sits at the left third of the screen, with the next pad in view.
 
 A run is 20 seconds to a few minutes. Restart is one tap.
@@ -34,11 +34,11 @@ Everything ramps over the first 60 pads:
 - Height differences between consecutive pads grow from ±6 px to ±40 px. A higher pad needs slightly more power; the physics is a real parabola, so the same power lands shorter on a higher pad.
 - From pad 30, some pads drift side to side (small arrows on the cap mark them). There is no timer, so a moving pad is a timing puzzle, not a rush.
 
-Scenery changes every 25 pads: Meadow, Dusk, Twilight, Cosmos, then around again. The sky crossfades on the first landing in a new biome. In Cosmos there is no water, just the void. Everything is pastel: cream pads with a rim highlight, soft clouds, a lavender skyline with warm windows, candy planets.
+The palette changes every 25 pads: Paper, Mist, Night, Ink, then around again. The background crossfades on the first landing in a new theme, and the UI flips to light text in the dark themes. There is no scenery, only a subtle gradient, a few soft out-of-focus circles for depth, the pads, the baseline, and the shape.
 
 ## Characters
 
-Seven jelly cubes, unlocked by best score: Mochi (0), Mint (25), Butter (75), Sky (150), Lavender (300), Peach (600), Cloud (1200). Streak scoring grows fast, so these are further apart than they look. A cube is a color, a face (`happy`, `sleepy`, `star`) and an accessory (`sprout`, `bow`, `glasses`, `crown`) in `data.js`; the drawing is a few canvas primitives in `drawChar`, so adding one is cheap.
+Seven shapes, unlocked by best score: Square (0), Circle (25), Triangle (75), Diamond (150), Hexagon (300), Star (600), Plus (1200). Streak scoring grows fast, so these are further apart than they look. A character is a shape name and a color in `data.js`; the color is also the glow, the charge ring, the perfect popups and the UI accent. Paths live in `shapePath`, so adding one is a few lines.
 
 ## Daily
 
@@ -55,8 +55,9 @@ The day number counts from 2026-09-29.
 
 ## Feel
 
-- Squash on charge, stretch in the air, a bounce on landing. Particles everywhere: cream dust and a few confetti squares on takeoff, a pastel trail in the air, dust and sparkles on landing, a confetti burst with a ring and sparkles on a perfect, droplets and screen shake on a splash.
-- The palette lives in `data.js` (`ink`, `cream`, `pastels`, and per-biome colors). The UI uses the same cream cards and pink primary button everywhere.
+- Squash on charge, stretch in the air, a bounce on landing. Particles are only small dots and thin rings: a few accent dots and a faint ring on takeoff, a faint trail in the air, muted dots on landing, two expanding rings and a burst of accent dots on a perfect, three ripples on the baseline on a miss.
+- Depth comes from a vertical gradient and a soft shadow on each pad, a gradient and a colored glow on the shape, and the soft background circles. Nothing has an outline.
+- The palette lives in `data.js` (`themes`). The UI is typography on the background: light weights, small letter-spaced caps for labels, a solid ink pill for the primary button, outlined pills for the rest.
 - Sound is optional synthesized WebAudio: a rising tone while charging, a boing, a thud, chimes that climb with the streak, a splash. Fully playable on mute.
 - Haptics go through the same `haptic()` hook as Next Stop (Capacitor Haptics when wrapped, `navigator.vibrate` where it exists).
 - The game pauses itself in the background. A charge in progress is cancelled on pause so a stray hold cannot fire on resume.

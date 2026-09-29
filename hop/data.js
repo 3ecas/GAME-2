@@ -1,4 +1,4 @@
-/* Hop — tuning, characters and biomes. Everything a designer would want to touch lives here.
+/* Hop — tuning, shapes and themes. Everything a designer would want to touch lives here.
 
    tuning (px, seconds; logical width is 390 px):
      D_MIN / D_MAX      horizontal jump distance at zero / full charge (flat landing)
@@ -9,17 +9,19 @@
      FROG_SCREEN_X      where the character rests on screen
      W_START / W_END    pad width range at the start of a run and after RAMP pads
      GAP_MARGIN         minimum clear space between two pads
-     H_MIN / H_MAX      pad heights above the water
+     H_MIN / H_MAX      pad heights above the baseline
      H_VAR_END          max height change between consecutive pads after RAMP pads
      MOVE_FROM          pad index from which moving pads can appear
      MOVE_CHANCE_END    chance of a moving pad after RAMP pads (ramps from 0)
-     BIOME_LEN          pads per biome before the scenery changes
+     BIOME_LEN          pads per theme before the palette changes
 
-   characters: cubes. `body` is the cube color, `face` is 'happy' | 'sleepy' | 'star',
-     `acc` is 'none' | 'sprout' | 'bow' | 'glasses' | 'crown'. `unlock` is the best score needed.
+   characters: the player is a plain shape. `shape` is square | circle | triangle | diamond |
+     hexagon | star | plus. `color` is its accent, also used for the glow, the charge ring and
+     the perfect popups. `unlock` is the best score needed.
 
-   biomes: pastel scenery. `scene` is 'hills' | 'skyline' | 'planets'. `sun.low` puts the sun
-     just above the hills. `water: null` means a void below the pads instead of water.
+   themes: one palette per 25 pads, light to dark and back. `pad` is [top, bottom] of the pad
+     gradient. `orb` tints the soft background circles that give the scene depth. `dark` flips the
+     UI text to light.
 */
 window.HOP_DATA = {
   tuning: {
@@ -30,26 +32,19 @@ window.HOP_DATA = {
     MOVE_FROM: 30, MOVE_CHANCE_END: 0.35, MOVE_AMP: [10, 22], MOVE_PERIOD: [2.0, 3.0],
     BIOME_LEN: 25,
   },
-  ink: '#4a3f5c',
-  cream: '#fff7ee',
-  pastels: ['#ffc9d6', '#bfeedd', '#fff0a6', '#bfe0ff', '#dcccff', '#ffd4b8'],
   characters: [
-    { id: 'mochi', name: 'Mochi', unlock: 0, body: '#ffc9d6', face: 'happy', acc: 'none' },
-    { id: 'mint', name: 'Mint', unlock: 25, body: '#bfeedd', face: 'happy', acc: 'sprout' },
-    { id: 'butter', name: 'Butter', unlock: 75, body: '#fff0a6', face: 'happy', acc: 'bow' },
-    { id: 'sky', name: 'Sky', unlock: 150, body: '#bfe0ff', face: 'sleepy', acc: 'none' },
-    { id: 'lavender', name: 'Lavender', unlock: 300, body: '#dcccff', face: 'star', acc: 'none' },
-    { id: 'peach', name: 'Peach', unlock: 600, body: '#ffd4b8', face: 'happy', acc: 'glasses' },
-    { id: 'cloud', name: 'Cloud', unlock: 1200, body: '#ffffff', face: 'happy', acc: 'crown' },
+    { id: 'square', name: 'Square', unlock: 0, shape: 'square', color: '#f25f5c' },
+    { id: 'circle', name: 'Circle', unlock: 25, shape: 'circle', color: '#4aa3df' },
+    { id: 'triangle', name: 'Triangle', unlock: 75, shape: 'triangle', color: '#f2b134' },
+    { id: 'diamond', name: 'Diamond', unlock: 150, shape: 'diamond', color: '#3cb371' },
+    { id: 'hexagon', name: 'Hexagon', unlock: 300, shape: 'hexagon', color: '#9b6bdf' },
+    { id: 'star', name: 'Star', unlock: 600, shape: 'star', color: '#f28c28' },
+    { id: 'plus', name: 'Plus', unlock: 1200, shape: 'plus', color: '#2bb5a8' },
   ],
-  biomes: [
-    { id: 'meadow', name: 'Meadow', sky: ['#cfe9ff', '#fff3e2'], clouds: '#ffffff', sun: { color: '#fff1b0', x: 300, y: 118, r: 30, low: false }, moon: false, stars: false, scene: 'hills',
-      far: '#cfeccf', near: '#a9dcae', water: '#b3dcf7', waterDeep: '#8ec2ea', padTop: '#f6dfc8', padSide: '#e5bfa3', padRim: '#fff5ea', marker: '#8d6f95' },
-    { id: 'dusk', name: 'Dusk', sky: ['#ffc8b8', '#fff2d9'], clouds: '#fff0ea', sun: { color: '#ffd9a0', x: 230, y: 0, r: 42, low: true }, moon: false, stars: false, scene: 'hills',
-      far: '#e2c3e6', near: '#c9a4d6', water: '#f6c5b5', waterDeep: '#e9a48f', padTop: '#f9e3ee', padSide: '#e6c3d5', padRim: '#fff6fa', marker: '#7d5b7b' },
-    { id: 'twilight', name: 'Twilight', sky: ['#4b4a80', '#9b8fcf'], clouds: null, sun: null, moon: true, stars: true, scene: 'skyline',
-      far: '#5f5a9a', near: '#4a4680', water: '#7d8fd0', waterDeep: '#5c6bb0', padTop: '#c9c0f0', padSide: '#9d92d6', padRim: '#eae4ff', marker: '#fff0b8' },
-    { id: 'cosmos', name: 'Cosmos', sky: ['#2f2a52', '#6b4d86'], clouds: null, sun: null, moon: false, stars: true, scene: 'planets',
-      far: '#4a3d6d', near: '#3a2f58', water: null, waterDeep: null, padTop: '#d9cdf2', padSide: '#a99bd6', padRim: '#f4eeff', marker: '#ffcfa3' },
+  themes: [
+    { id: 'paper', name: 'Paper', dark: false, bg: '#f7f4ee', bg2: '#ece7df', ink: '#2b2b2b', muted: '#9c968e', pad: ['#ffffff', '#efeae2'], padShadow: 'rgba(40,30,20,.16)', base: 'rgba(43,43,43,.14)', void: '#ebe6dd', marker: '#2b2b2b', orb: '#f3c9a6' },
+    { id: 'mist', name: 'Mist', dark: false, bg: '#eef2f6', bg2: '#dfe6ee', ink: '#26303a', muted: '#8f9aa6', pad: ['#ffffff', '#e4ebf2'], padShadow: 'rgba(20,40,60,.16)', base: 'rgba(38,48,58,.14)', void: '#dfe6ee', marker: '#26303a', orb: '#a9c7e3' },
+    { id: 'night', name: 'Night', dark: true, bg: '#23262e', bg2: '#181a20', ink: '#f2f2f0', muted: '#8d919c', pad: ['#3d414c', '#2b2e37'], padShadow: 'rgba(0,0,0,.4)', base: 'rgba(242,242,240,.16)', void: '#1b1d23', marker: '#f2f2f0', orb: '#4f5670' },
+    { id: 'ink', name: 'Ink', dark: true, bg: '#141c30', bg2: '#0b1020', ink: '#eef1f8', muted: '#7f89a3', pad: ['#2b3653', '#1f2841'], padShadow: 'rgba(0,0,0,.45)', base: 'rgba(238,241,248,.16)', void: '#0f1526', marker: '#eef1f8', orb: '#3a4e85' },
   ],
 };
