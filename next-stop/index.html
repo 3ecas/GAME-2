@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Next Stop">
+<meta name="theme-color" content="#0d1120">
+<meta name="description" content="Hold to brake. Stop on the line. A one-thumb metro game for the metro.">
+<title>Next Stop</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="layer hidden">
+    <div>
+      <div class="hud-top">
+        <div class="pill"><span class="dot" id="hud-dot"></span><span id="hud-line">Linha Azul</span></div>
+        <div class="score-wrap"><div id="hud-score" class="score">0</div><div id="hud-stops" class="stops">0 STATIONS</div></div>
+      </div>
+      <div class="hud-next-wrap"><span id="hud-next-label">NEXT</span><span id="hud-next" class="hud-next">—</span><span id="hud-flags"></span></div>
+    </div>
+    <div class="hud-bottom">
+      <div id="hud-streak" class="streak"></div>
+      <div id="hud-hint" class="hint">HOLD TO BRAKE</div>
+    </div>
+  </div>
+
+  <div id="menu" class="layer overlay">
+    <div class="eyebrow">MIND THE LINE</div>
+    <h1 class="title">NEXT<br><span>STOP</span></h1>
+    <p class="sub">Hold to brake. Stop on the line.</p>
+    <div class="picker">
+      <button class="arrow" id="prev" aria-label="Previous line">‹</button>
+      <div class="line-card"><span class="dot" id="m-dot"></span><div style="min-width:0"><div class="city" id="m-city">LISBOA</div><div class="lname" id="m-name">Linha Azul</div></div></div>
+      <button class="arrow" id="next" aria-label="Next line">›</button>
+    </div>
+    <div class="dots" id="m-dots"></div>
+    <div class="stats" id="m-stats"></div>
+    <button class="btn" id="play">PLAY</button>
+    <button class="btn secondary" id="daily">DAILY</button>
+    <div class="row"><button class="link" id="help-btn">How to play</button><button class="link" id="sound-btn">Sound: on</button></div>
+  </div>
+
+  <div id="over" class="layer overlay hidden">
+    <div class="eyebrow" id="o-eyebrow">END OF SERVICE</div>
+    <div class="reason" id="o-title">Overshot</div>
+    <div class="big" id="o-stats">0 stations · 0 perfect · 0 pts</div>
+    <div class="best" id="o-best"></div>
+    <div class="strip" id="o-strip"></div>
+    <div class="unlock" id="o-unlock"></div>
+    <button class="btn" id="o-again">AGAIN</button>
+    <button class="btn" id="o-share">SHARE</button>
+    <button class="btn secondary" id="o-menu">MENU</button>
+  </div>
+
+  <div id="pause" class="layer overlay hidden">
+    <div class="reason">PAUSED</div>
+    <p class="sub">Tap to resume</p>
+  </div>
+
+  <div id="help" class="layer overlay hidden">
+    <div class="card">
+      <div><b>Hold</b> anywhere to brake. <b>Release</b> to coast. You can pump the brake.</div>
+      <div>Stop with the <b>front of the train on the white line</b>.</div>
+      <div><span class="k" style="background:rgba(255,255,255,.8)"></span><b>Perfect</b> is the thin bright band: 3 points plus your streak.</div>
+      <div><span class="k" style="background:rgba(47,127,214,.8)"></span><b>Good</b> is the wide band: 1 point, streak resets.</div>
+      <div>Overshoot the band, or stop before it, and the run ends.</div>
+      <div><b style="color:#5aa9ff">WET RAILS</b> means weak brakes. Brake early.</div>
+      <div><b style="color:#ff6b7a">SKIP</b> stations have no stop line. Drive straight through.</div>
+      <div>Every day has one <b>Daily</b> run, the same for everyone. One try.</div>
+      <button class="btn secondary" id="help-close" style="margin-top:6px">GOT IT</button>
+    </div>
+  </div>
+</div>
+<script src="lines.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
