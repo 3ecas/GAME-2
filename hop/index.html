@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Hop">
-<meta name="theme-color" content="#0e1a2b">
+<meta name="theme-color" content="#cfe9ff">
 <meta name="description" content="Hold to charge, release to jump, land dead center. A one-thumb hopper for the metro.">
 <title>Hop</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -23,7 +23,7 @@
     <div class="hud-top">
       <div><span class="pill" id="hud-mode">POND</span></div>
       <div class="score-wrap"><div id="hud-score" class="score">0</div><div id="hud-combo" class="combo"></div></div>
-      <div class="best" id="hud-best">BEST 0</div>
+      <div class="best"><span class="pill" id="hud-best">BEST 0</span></div>
     </div>
     <div class="hud-bottom">
       <div id="hud-hint" class="hint">HOLD TO JUMP</div>
@@ -31,12 +31,12 @@
   </div>
 
   <div id="menu" class="layer overlay">
-    <div class="eyebrow">DEAD CENTER</div>
+    <div class="eyebrow">COZY LITTLE HOPS</div>
     <h1 class="title">HOP</h1>
     <p class="sub">Hold to charge. Release to jump.<br>Land dead center for a streak.</p>
     <div class="picker">
       <button class="arrow" id="prev" aria-label="Previous character">‹</button>
-      <div class="char-card"><canvas id="m-preview" width="112" height="112"></canvas><div style="min-width:0"><div class="kind" id="m-kind">CHARACTER</div><div class="cname" id="m-name">Frog</div></div></div>
+      <div class="char-card"><canvas id="m-preview" width="112" height="112"></canvas><div style="min-width:0"><div class="kind" id="m-kind">CUBE</div><div class="cname" id="m-name">Mochi</div></div></div>
       <button class="arrow" id="next" aria-label="Next character">›</button>
     </div>
     <div class="dots" id="m-dots"></div>
@@ -67,7 +67,7 @@
     <div class="card">
       <div><b>Hold</b> anywhere to charge. The longer you hold, the further you fly. <b>Release</b> to jump.</div>
       <div>Land on the next pad. Miss it and you are in the water.</div>
-      <div>Land on the <b>dot in the middle</b> for a PERFECT. Every perfect in a row is worth more: 2, 4, 6, 8…</div>
+      <div>Land on the <b>little dot in the middle</b> for a PERFECT. Every perfect in a row is worth more: 2, 4, 6, 8…</div>
       <div>Any other landing is worth 1 and resets the streak.</div>
       <div>Two pads close together? <b>Jump over one</b> for a bonus.</div>
       <div>Higher pads need a bit more power. Some pads drift from side to side.</div>

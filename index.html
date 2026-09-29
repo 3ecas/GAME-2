@@ -14,7 +14,7 @@
   h1 { font-size:40px; font-weight:900; letter-spacing:-.02em; line-height:1; margin-bottom:6px; }
   p.sub { color:var(--muted); font-weight:600; margin-bottom:12px; }
   a.card, div.card { display:flex; align-items:center; gap:14px; padding:16px; border-radius:18px; background:var(--panel); color:inherit; text-decoration:none; }
-  .card .ico { width:52px; height:52px; border-radius:14px; flex:none; display:grid; place-items:center; font-size:26px; }
+  .card .ico { width:52px; height:52px; border-radius:14px; flex:none; display:grid; place-items:center; font-size:26px; object-fit:cover; }
   .card .t { font-size:20px; font-weight:900; }
   .card .d { color:var(--muted); font-size:13px; font-weight:600; margin-top:2px; }
   .card .tag { margin-left:auto; font-size:11px; font-weight:800; letter-spacing:.12em; padding:6px 10px; border-radius:999px; background:#2f7fd6; color:#fff; flex:none; }
@@ -34,8 +34,8 @@
     <div class="tag">PLAY</div>
   </a>
   <a class="card" href="hop/">
-    <div class="ico" style="background:#3fbf6f">🐸</div>
-    <div><div class="t">Hop</div><div class="d">Hold to charge, release to jump. Land dead center.</div></div>
+    <img class="ico" src="hop/icon-192.png" alt="" width="52" height="52">
+    <div><div class="t">Hop</div><div class="d">A cozy little cube. Hold to charge, release to jump, land dead center.</div></div>
     <div class="tag">PLAY</div>
   </a>
   <div class="card soon">

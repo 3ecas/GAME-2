@@ -1,6 +1,6 @@
 # Hop
 
-Hold to charge, release to jump, land dead center. A side-view 2D hopper for one thumb.
+Hold to charge, release to jump, land dead center. A side-view 2D hopper for one thumb, starring a cozy jelly cube in pastels.
 
 ## Play
 
@@ -34,11 +34,11 @@ Everything ramps over the first 60 pads:
 - Height differences between consecutive pads grow from ±6 px to ±40 px. A higher pad needs slightly more power; the physics is a real parabola, so the same power lands shorter on a higher pad.
 - From pad 30, some pads drift side to side (small arrows on the cap mark them). There is no timer, so a moving pad is a timing puzzle, not a rush.
 
-Scenery changes every 25 pads: Pond, Sunset, Night, Space, then around again. The sky crossfades on the first landing in a new biome. In Space there is no water, just the void.
+Scenery changes every 25 pads: Meadow, Dusk, Twilight, Cosmos, then around again. The sky crossfades on the first landing in a new biome. In Cosmos there is no water, just the void. Everything is pastel: cream pads with a rim highlight, soft clouds, a lavender skyline with warm windows, candy planets.
 
 ## Characters
 
-Seven characters, unlocked by best score: Frog (0), Toad (25), Ghost (75), Cat (150), Ninja (300), Astronaut (600), King (1200). Streak scoring grows fast, so these are further apart than they look. Each is a few canvas primitives in `drawChar` and a row in `data.js`, so adding one is cheap.
+Seven jelly cubes, unlocked by best score: Mochi (0), Mint (25), Butter (75), Sky (150), Lavender (300), Peach (600), Cloud (1200). Streak scoring grows fast, so these are further apart than they look. A cube is a color, a face (`happy`, `sleepy`, `star`) and an accessory (`sprout`, `bow`, `glasses`, `crown`) in `data.js`; the drawing is a few canvas primitives in `drawChar`, so adding one is cheap.
 
 ## Daily
 
@@ -55,7 +55,8 @@ The day number counts from 2026-09-29.
 
 ## Feel
 
-- Squash on charge, stretch in the air, a bounce on landing, dust puffs, a ring on perfects, a splash and screen shake on a miss.
+- Squash on charge, stretch in the air, a bounce on landing. Particles everywhere: cream dust and a few confetti squares on takeoff, a pastel trail in the air, dust and sparkles on landing, a confetti burst with a ring and sparkles on a perfect, droplets and screen shake on a splash.
+- The palette lives in `data.js` (`ink`, `cream`, `pastels`, and per-biome colors). The UI uses the same cream cards and pink primary button everywhere.
 - Sound is optional synthesized WebAudio: a rising tone while charging, a boing, a thud, chimes that climb with the streak, a splash. Fully playable on mute.
 - Haptics go through the same `haptic()` hook as Next Stop (Capacitor Haptics when wrapped, `navigator.vibrate` where it exists).
 - The game pauses itself in the background. A charge in progress is cancelled on pause so a stray hold cannot fire on resume.

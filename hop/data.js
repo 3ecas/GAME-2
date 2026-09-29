@@ -14,6 +14,12 @@
      MOVE_FROM          pad index from which moving pads can appear
      MOVE_CHANCE_END    chance of a moving pad after RAMP pads (ramps from 0)
      BIOME_LEN          pads per biome before the scenery changes
+
+   characters: cubes. `body` is the cube color, `face` is 'happy' | 'sleepy' | 'star',
+     `acc` is 'none' | 'sprout' | 'bow' | 'glasses' | 'crown'. `unlock` is the best score needed.
+
+   biomes: pastel scenery. `scene` is 'hills' | 'skyline' | 'planets'. `sun.low` puts the sun
+     just above the hills. `water: null` means a void below the pads instead of water.
 */
 window.HOP_DATA = {
   tuning: {
@@ -24,19 +30,26 @@ window.HOP_DATA = {
     MOVE_FROM: 30, MOVE_CHANCE_END: 0.35, MOVE_AMP: [10, 22], MOVE_PERIOD: [2.0, 3.0],
     BIOME_LEN: 25,
   },
+  ink: '#4a3f5c',
+  cream: '#fff7ee',
+  pastels: ['#ffc9d6', '#bfeedd', '#fff0a6', '#bfe0ff', '#dcccff', '#ffd4b8'],
   characters: [
-    { id: 'frog', name: 'Frog', unlock: 0, body: '#4cc26b', belly: '#bff0c4', acc: 'none' },
-    { id: 'toad', name: 'Toad', unlock: 25, body: '#e8893a', belly: '#ffd9a8', acc: 'none' },
-    { id: 'ghost', name: 'Ghost', unlock: 75, body: '#f2f4ff', belly: '#ffffff', acc: 'sheet' },
-    { id: 'cat', name: 'Cat', unlock: 150, body: '#8d8fa5', belly: '#e6e7f2', acc: 'ears' },
-    { id: 'ninja', name: 'Ninja', unlock: 300, body: '#2b2f45', belly: '#3d4260', acc: 'band' },
-    { id: 'astro', name: 'Astronaut', unlock: 600, body: '#f4f4f4', belly: '#dfe6f5', acc: 'helmet' },
-    { id: 'king', name: 'King', unlock: 1200, body: '#4cc26b', belly: '#bff0c4', acc: 'crown' },
+    { id: 'mochi', name: 'Mochi', unlock: 0, body: '#ffc9d6', face: 'happy', acc: 'none' },
+    { id: 'mint', name: 'Mint', unlock: 25, body: '#bfeedd', face: 'happy', acc: 'sprout' },
+    { id: 'butter', name: 'Butter', unlock: 75, body: '#fff0a6', face: 'happy', acc: 'bow' },
+    { id: 'sky', name: 'Sky', unlock: 150, body: '#bfe0ff', face: 'sleepy', acc: 'none' },
+    { id: 'lavender', name: 'Lavender', unlock: 300, body: '#dcccff', face: 'star', acc: 'none' },
+    { id: 'peach', name: 'Peach', unlock: 600, body: '#ffd4b8', face: 'happy', acc: 'glasses' },
+    { id: 'cloud', name: 'Cloud', unlock: 1200, body: '#ffffff', face: 'happy', acc: 'crown' },
   ],
   biomes: [
-    { id: 'pond', name: 'Pond', sky: ['#7fcdff', '#dff4ff'], far: '#9ad3a0', near: '#5fae6a', water: '#3a9ad8', waterDeep: '#2a6fb0', padTop: '#d2a465', padSide: '#8b5a2b', marker: '#2b1b0e', sun: '#fff1a8' },
-    { id: 'sunset', name: 'Sunset', sky: ['#ff8a5c', '#ffd08a'], far: '#9b5f9b', near: '#5e3a6e', water: '#d9785a', waterDeep: '#8f3e3e', padTop: '#c8ccd6', padSide: '#7a7f8c', marker: '#2a2d36', sun: '#ffd27a' },
-    { id: 'night', name: 'Night', sky: ['#070b22', '#1a2a5e'], far: '#0d1533', near: '#070b1c', water: '#123a6e', waterDeep: '#071a36', padTop: '#4d63a8', padSide: '#222c52', marker: '#8ff6ff', sun: '#fff6d0' },
-    { id: 'space', name: 'Space', sky: ['#020108', '#1b0a33'], far: '#2a1747', near: '#120a22', water: null, waterDeep: null, padTop: '#a39cb3', padSide: '#5e5670', marker: '#ff9f43', sun: null },
+    { id: 'meadow', name: 'Meadow', sky: ['#cfe9ff', '#fff3e2'], clouds: '#ffffff', sun: { color: '#fff1b0', x: 300, y: 118, r: 30, low: false }, moon: false, stars: false, scene: 'hills',
+      far: '#cfeccf', near: '#a9dcae', water: '#b3dcf7', waterDeep: '#8ec2ea', padTop: '#f6dfc8', padSide: '#e5bfa3', padRim: '#fff5ea', marker: '#8d6f95' },
+    { id: 'dusk', name: 'Dusk', sky: ['#ffc8b8', '#fff2d9'], clouds: '#fff0ea', sun: { color: '#ffd9a0', x: 230, y: 0, r: 42, low: true }, moon: false, stars: false, scene: 'hills',
+      far: '#e2c3e6', near: '#c9a4d6', water: '#f6c5b5', waterDeep: '#e9a48f', padTop: '#f9e3ee', padSide: '#e6c3d5', padRim: '#fff6fa', marker: '#7d5b7b' },
+    { id: 'twilight', name: 'Twilight', sky: ['#4b4a80', '#9b8fcf'], clouds: null, sun: null, moon: true, stars: true, scene: 'skyline',
+      far: '#5f5a9a', near: '#4a4680', water: '#7d8fd0', waterDeep: '#5c6bb0', padTop: '#c9c0f0', padSide: '#9d92d6', padRim: '#eae4ff', marker: '#fff0b8' },
+    { id: 'cosmos', name: 'Cosmos', sky: ['#2f2a52', '#6b4d86'], clouds: null, sun: null, moon: false, stars: true, scene: 'planets',
+      far: '#4a3d6d', near: '#3a2f58', water: null, waterDeep: null, padTop: '#d9cdf2', padSide: '#a99bd6', padRim: '#f4eeff', marker: '#ffcfa3' },
   ],
 };
